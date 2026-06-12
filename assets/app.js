@@ -666,7 +666,7 @@ function hydrateWorkspace() {
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || `登录失败 ${response.status}`);
       if (status) status.textContent = "登录成功，正在进入后台。";
-      location.href = "/admin.html";
+      location.href = "/admin";
     } catch (error) {
       if (status) status.textContent = `登录失败：${error.message}`;
     }
@@ -676,7 +676,7 @@ function hydrateWorkspace() {
     const response = await fetch("/api/auth/me");
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      location.href = `/login.html?next=${encodeURIComponent(location.pathname)}`;
+      location.href = `/login?next=${encodeURIComponent(location.pathname)}`;
       throw new Error(payload.error || "请先登录");
     }
     const currentUser = byId("currentUser");
@@ -686,7 +686,7 @@ function hydrateWorkspace() {
 
   async function logoutUser() {
     await fetch("/api/auth/logout", { method: "POST" });
-    location.href = "/login.html";
+    location.href = "/login";
   }
 
   async function loadHarnessConfig() {

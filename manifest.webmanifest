@@ -2,7 +2,7 @@
   "name": "百家姓溯源录",
   "short_name": "溯源录",
   "description": "中华姓氏文化科普数据库网站",
-  "start_url": "/index.html",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "theme_color": "#C81623",

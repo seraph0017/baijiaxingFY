@@ -42,7 +42,7 @@ try {
   const health = await fetch(`${baseUrl}/api/health`).then(res => res.json());
   await expectOk("health", health.ok && health.service === "baijiaxing-suyuanlu" && health.seedReady);
 
-  const home = await fetch(`${baseUrl}/index.html`);
+  const home = await fetch(`${baseUrl}/`);
   const html = await home.text();
   await expectOk("首页 HTML", html.includes("<!doctype html>") && html.includes("assets/app.js") && html.includes("百家姓溯源录"));
   await expectOk("安全响应头", home.headers.get("content-security-policy")?.includes("script-src 'self'"));

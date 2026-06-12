@@ -119,13 +119,13 @@ const rateCleanupTrigger = await callRoute({
 Date.now = originalDateNowForRateLimit;
 await expectOk("限流桶过期后自动清理", rateCleanupTrigger.status === 200 && serverModule.getRateBucketCount() <= initialRateBucketCount + 1);
 
-const home = await callRoute({ url: "/index.html" });
+const home = await callRoute({ url: "/" });
 await expectOk("首页 HTML", home.status === 200 && home.text.includes("百家姓溯源录") && home.headers["content-type"].includes("text/html"));
-await expectOk("首页公开地址渲染", home.text.includes("http://127.0.0.1:8765/index.html") && !home.text.includes("__SITE_ORIGIN__"));
+await expectOk("首页公开地址渲染", home.text.includes("http://127.0.0.1:8765/") && !home.text.includes("__SITE_ORIGIN__"));
 await expectOk("首页不缓存", home.headers["cache-control"] === "no-store");
-const homeWithEtag = await callRoute({ url: "/index.html", headers: { "if-none-match": home.headers.etag } });
+const homeWithEtag = await callRoute({ url: "/", headers: { "if-none-match": home.headers.etag } });
 await expectOk("首页 no-store 忽略 ETag 条件请求", homeWithEtag.status === 200 && homeWithEtag.text.includes("百家姓溯源录"));
-const postHome = await callRoute({ method: "POST", url: "/index.html" });
+const postHome = await callRoute({ method: "POST", url: "/" });
 await expectOk("静态页面拒绝非 GET HEAD 方法", postHome.status === 405 && /Method not allowed/.test(postHome.text));
 await expectOk("静态资源 405 返回 Allow 头", postHome.headers.allow === "GET, HEAD");
 

@@ -4,7 +4,7 @@
 
 **Goal:** Split public homepage and material-management backend into separate pages, add a user system, and make Harness configurable from the backend with MySQL persistence.
 
-**Architecture:** Keep the existing Node.js no-framework runtime. Add a storage boundary in `server.js` backed by MySQL when `DATABASE_URL` or `MYSQL_*` is configured, with file fallback only for local development. Add `/login.html` and `/admin.html`; protect admin APIs with cookie sessions and roles.
+**Architecture:** Keep the existing Node.js no-framework runtime. Add a storage boundary in `server.js` backed by MySQL when `DATABASE_URL` or `MYSQL_*` is configured, with file fallback only for local development. Add `/login` and `/admin`; protect admin APIs with cookie sessions and roles.
 
 **Tech Stack:** Node.js ESM, built-in `crypto/http/fs`, `mysql2`, HTML/CSS/JS, current verification scripts.
 
@@ -18,7 +18,7 @@
 - Modify: `verify-server-logic.mjs`
 - Modify: `verify-site.mjs`
 
-- [ ] Add failing checks that require `/admin.html` and `/login.html`, with `index.html` no longer containing the operations workspace.
+- [ ] Add failing checks that require `/admin` and `/login`, with `index.html` no longer containing the operations workspace.
 - [ ] Add failing auth checks for `POST /api/auth/login`, `GET /api/auth/me`, `POST /api/auth/logout`, and role-protected admin APIs.
 - [ ] Add failing Harness config checks for `GET/PUT /api/harness-config`, with API keys write-only.
 - [ ] Add failing persistence checks for MySQL configuration support and documented schema/bootstrap behavior.

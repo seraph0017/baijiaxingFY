@@ -21,13 +21,13 @@ const duplicatedLoginIds = loginIds.filter((id, index) => loginIds.indexOf(id) !
 expectOk("无重复 ID", duplicatedIds.length === 0);
 expectOk("后台无重复 ID", duplicatedAdminIds.length === 0);
 expectOk("登录页无重复 ID", duplicatedLoginIds.length === 0);
-expectOk("首页与资料整理分离", html.includes('href="/admin.html"') && !html.includes('id="opsView"') && !html.includes('id="harness"') && adminHtml.includes('id="adminApp"') && adminHtml.includes('id="harnessConfigForm"'));
+expectOk("首页与资料整理分离", html.includes('href="/admin"') && !html.includes('id="opsView"') && !html.includes('id="harness"') && adminHtml.includes('id="adminApp"') && adminHtml.includes('id="harnessConfigForm"'));
 expectOk("登录页完整", loginHtml.includes('id="loginForm"') && ["loginUsername", "loginPassword", "loginSubmit", "loginStatus"].every(id => loginIds.includes(id)) && app.includes("function loginUser") && app.includes("/api/auth/login"));
 expectOk("后台用户会话入口", adminHtml.includes('id="currentUser"') && adminHtml.includes('id="logoutBtn"') && app.includes("function requireAdminSession") && app.includes("/api/auth/me") && app.includes("/api/auth/logout"));
 expectOk("后台 Harness 可配置", ["harnessEndpoint", "harnessModel", "harnessApiKey", "harnessSystemPrompt", "harnessTemperature", "harnessRetrievalQuery", "saveHarnessConfigBtn", "harnessConfigStatus"].every(id => adminIds.includes(id)) && app.includes("loadHarnessConfig") && app.includes("saveHarnessConfig") && app.includes("/api/harness-config"));
 expectOk("首屏工作台结构", html.includes('class="hero-panel"') && html.includes('class="ops-panel"') && html.includes("百家姓溯源录"));
 expectOk("核心模块完整", ["profile", "culture", "sources", "feedback"].every(id => html.includes(`id="${id}"`)) && adminHtml.includes('id="harness"'));
-expectOk("前台后台页面分区", ids.includes("publicView") && adminIds.includes("adminApp") && html.includes('href="/admin.html"') && adminHtml.includes('href="/index.html"'));
+expectOk("前台后台页面分区", ids.includes("publicView") && adminIds.includes("adminApp") && html.includes('href="/admin"') && adminHtml.includes('href="/"'));
 expectOk("查询控件完整", ["surnameInput", "searchBtn", "hotList", "dataReady"].every(id => ids.includes(id)));
 expectOk("AI Harness 控件完整", ["retrievalQuery", "harnessBtn", "aiDraft"].every(id => adminIds.includes(id)) && adminHtml.indexOf('id="adminApp"') < adminHtml.indexOf('id="harness"'));
 expectOk("运营令牌验证", ["adminToken", "verifyAdminBtn", "clearAdminBtn", "adminStatus"].every(id => adminIds.includes(id)) && app.includes("function verifyAdminAccess") && app.includes("function clearAdminAccess") && app.includes("sessionStorage.removeItem(\"baijiaxing-admin-token\")") && app.includes("loadFeedbackQueue()") && app.includes("loadAuditTrail()"));

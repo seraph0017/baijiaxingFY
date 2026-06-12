@@ -209,9 +209,9 @@ process.env.SITE_ORIGIN = "   ";
 
 const { handleRequest: handleBlankSiteOrigin } = await import(`./server.js?prod-blank-site-origin=${Date.now()}`);
 
-const homeWithBlankSiteOrigin = await callRoute(handleBlankSiteOrigin, { url: "/index.html" });
+const homeWithBlankSiteOrigin = await callRoute(handleBlankSiteOrigin, { url: "/" });
 expectOk("空白 SITE_ORIGIN 回退默认公开地址", homeWithBlankSiteOrigin.status === 200
-  && homeWithBlankSiteOrigin.text.includes("http://127.0.0.1:8765/index.html")
+  && homeWithBlankSiteOrigin.text.includes("http://127.0.0.1:8765/")
   && !homeWithBlankSiteOrigin.text.includes('__SITE_ORIGIN__')
   && !/href="\s+\/index\.html"/.test(homeWithBlankSiteOrigin.text));
 
@@ -226,15 +226,15 @@ process.env.SITE_ORIGIN = "javascript:alert(1)";
 
 const { handleRequest: handleInvalidSiteOrigin } = await import(`./server.js?prod-invalid-site-origin=${Date.now()}`);
 
-const homeWithInvalidSiteOrigin = await callRoute(handleInvalidSiteOrigin, { url: "/index.html" });
+const homeWithInvalidSiteOrigin = await callRoute(handleInvalidSiteOrigin, { url: "/" });
 const robotsWithInvalidSiteOrigin = await callRoute(handleInvalidSiteOrigin, { url: "/robots.txt" });
 const sitemapWithInvalidSiteOrigin = await callRoute(handleInvalidSiteOrigin, { url: "/sitemap.xml" });
 expectOk("非法 SITE_ORIGIN 回退默认公开地址", homeWithInvalidSiteOrigin.status === 200
   && robotsWithInvalidSiteOrigin.status === 200
   && sitemapWithInvalidSiteOrigin.status === 200
-  && homeWithInvalidSiteOrigin.text.includes("http://127.0.0.1:8765/index.html")
+  && homeWithInvalidSiteOrigin.text.includes("http://127.0.0.1:8765/")
   && robotsWithInvalidSiteOrigin.text.includes("Sitemap: http://127.0.0.1:8765/sitemap.xml")
-  && sitemapWithInvalidSiteOrigin.text.includes("<loc>http://127.0.0.1:8765/index.html</loc>")
+  && sitemapWithInvalidSiteOrigin.text.includes("<loc>http://127.0.0.1:8765/</loc>")
   && !/javascript:alert/.test(`${homeWithInvalidSiteOrigin.text}\n${robotsWithInvalidSiteOrigin.text}\n${sitemapWithInvalidSiteOrigin.text}`));
 
 const runtimeDirInvalidPort = join(tmpdir(), `baijiaxing-prod-invalid-port-${Date.now()}`);
@@ -247,9 +247,9 @@ process.env.SITE_ORIGIN = "   ";
 
 const { handleRequest: handleInvalidPort } = await import(`./server.js?prod-invalid-port=${Date.now()}`);
 
-const homeWithInvalidPort = await callRoute(handleInvalidPort, { url: "/index.html" });
+const homeWithInvalidPort = await callRoute(handleInvalidPort, { url: "/" });
 expectOk("无效 PORT 回退默认公开地址", homeWithInvalidPort.status === 200
-  && homeWithInvalidPort.text.includes("http://127.0.0.1:8765/index.html")
+  && homeWithInvalidPort.text.includes("http://127.0.0.1:8765/")
   && !homeWithInvalidPort.text.includes("NaN"));
 
 const runtimeDirBlankHost = join(tmpdir(), `baijiaxing-prod-blank-host-${Date.now()}`);
@@ -263,9 +263,9 @@ process.env.SITE_ORIGIN = "   ";
 
 const { handleRequest: handleBlankHost } = await import(`./server.js?prod-blank-host=${Date.now()}`);
 
-const homeWithBlankHost = await callRoute(handleBlankHost, { url: "/index.html" });
+const homeWithBlankHost = await callRoute(handleBlankHost, { url: "/" });
 expectOk("空白 HOST 回退默认公开地址", homeWithBlankHost.status === 200
-  && homeWithBlankHost.text.includes("http://127.0.0.1:8765/index.html")
+  && homeWithBlankHost.text.includes("http://127.0.0.1:8765/")
   && !/https?:\/\/\s+:/.test(homeWithBlankHost.text));
 
 rmSync(runtimeDir, { recursive: true, force: true });

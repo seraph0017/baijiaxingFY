@@ -6,7 +6,7 @@
 
 - `server.js`：Node.js 服务，提供静态页面、工作区 JSON 持久化和 AI 代理 API。
 - `package.json`：项目脚本入口。
-- `index.html`：网站页面结构入口。
+- `index.html`：前台页面内部文件；对外访问路径为 `/`。
 - `robots.txt` / `sitemap.xml` / `manifest.webmanifest`：公开站 SEO、爬虫和安装入口基础资产。
 - `assets/icon.svg`：浏览器 favicon 与 Web App Manifest 品牌图标。
 - `assets/styles.css`：深色科技国风资料库视觉样式，融合中国红、鎏金、米白与青绿色高亮。
@@ -40,7 +40,7 @@
 - 工程化形态：HTML / CSS / JS / seed data / Node API 已拆分，后续可直接换数据库或接后台。
 - 上线基础：安全响应头、收紧 CSP 去除内联样式依赖、静态资源目录边界校验、写接口限流、操作审计日志、Docker 部署配置。
 - 公开站上线资产：SEO / Open Graph / Twitter Card 元信息、favicon、`robots.txt`、`sitemap.xml`、Web App Manifest。
-- 演示入口：`index.html?demo=pending` 自动跑通“张姓待收录 -> 资料入库 -> AI 初稿 -> 审核发布”。
+- 演示入口：`/?demo=pending` 自动跑通“张姓待收录 -> 资料入库 -> AI 初稿 -> 审核发布”。
 
 ## 运行方式
 
@@ -71,9 +71,9 @@ npm start
 访问地址：
 
 ```text
-http://127.0.0.1:8765/index.html
-http://127.0.0.1:8765/login.html
-http://127.0.0.1:8765/admin.html
+http://127.0.0.1:8765/
+http://127.0.0.1:8765/login
+http://127.0.0.1:8765/admin
 http://127.0.0.1:8765/api/health
 ```
 
@@ -88,8 +88,8 @@ npm start
 然后访问：
 
 ```text
-http://localhost:8765/index.html
-http://localhost:8765/index.html?demo=pending
+http://localhost:8765/
+http://localhost:8765/?demo=pending
 ```
 
 默认监听 `127.0.0.1:8765`。可通过环境变量调整：
@@ -119,7 +119,7 @@ AI_TIMEOUT_MS=30000
 REQUEST_TIMEOUT_MS=30000
 ```
 
-不建议直接打开 `index.html` 作为交付预览；当前版本按 Node 项目组织，初始资料库、MySQL 持久化、用户会话和 AI 代理都通过本地服务提供。
+不建议直接双击静态页面文件作为交付预览；当前版本按 Node 项目组织，初始资料库、MySQL 持久化、用户会话和 AI 代理都通过本地服务提供。
 
 ## 数据库与本地存储
 
@@ -201,7 +201,7 @@ docker run --rm \
 - 必须把 `SITE_ORIGIN` 设置为正式 HTTP(S) 访问域名，服务端会用它生成 `robots.txt` 和 `sitemap.xml` 内的完整地址；如果误填空白字符或非 HTTP(S) 地址，服务端会回退到默认 `http://HOST:PORT`，避免生成空白、脚本协议或非法 canonical / sitemap 地址。
 - 把运行目录挂载为持久卷，保留 `workspace.json`、`audit.log` 和备份文件；镜像内置的 `data/seed-workspace.json` 不应被运行卷覆盖。
 - 当前源码交付目录只保留 `data/seed-workspace.json`；运行态 `workspace.json`、`audit.log`、`feedback.jsonl` 和 `backups/` 会在服务运行后生成，不应作为初始交付数据随包带出。
-- 反向代理公开暴露 `GET /index.html`、`GET /assets/*`、`GET /robots.txt`、`GET /sitemap.xml`、`GET /manifest.webmanifest`、`GET/HEAD /api/health`、`GET /api/bootstrap`、`GET /api/surnames`、`GET /api/surname`。`GET /api/workspace` 需管理令牌，只给运营台读取完整工作区。
+- 反向代理公开暴露 `GET /`、`GET /assets/*`、`GET /robots.txt`、`GET /sitemap.xml`、`GET /manifest.webmanifest`、`GET/HEAD /api/health`、`GET /api/bootstrap`、`GET /api/surnames`、`GET /api/surname`。`GET /api/workspace` 需管理令牌，只给运营台读取完整工作区。
 - `AI_API_KEY` 只放服务端环境变量，不写入前端页面或资料 JSON。
 
 ## 验收方式

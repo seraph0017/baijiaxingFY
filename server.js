@@ -1098,7 +1098,12 @@ function serveStatic(req, res, pathname) {
     send(res, 405, { ok: false, error: "Method not allowed" }, "application/json; charset=utf-8", { allow: "GET, HEAD" });
     return;
   }
-  const requested = pathname === "/" ? "/index.html" : pathname;
+  const routeAliases = new Map([
+    ["/", "/index.html"],
+    ["/admin", "/admin.html"],
+    ["/login", "/login.html"]
+  ]);
+  const requested = routeAliases.get(pathname) || pathname;
   const isRootStatic = requested === "/index.html" || requested === "/admin.html" || requested === "/login.html" || requested === "/robots.txt" || requested === "/sitemap.xml" || requested === "/manifest.webmanifest";
   const isAssetStatic = requested.startsWith("/assets/");
   const isAllowedStatic = isRootStatic || isAssetStatic;
