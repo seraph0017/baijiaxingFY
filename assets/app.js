@@ -714,6 +714,30 @@ function hydrateWorkspace() {
     });
   }
 
+  function parseAiSources(text) {
+    return parseAiListSection(text).slice(0, 10);
+  }
+
+  function parseAiRisks(text) {
+    return parseAiListSection(text).slice(0, 8);
+  }
+
+  function buildRouteFromMigrations(migrations) {
+    const points = [
+      { x: 14, y: 48 },
+      { x: 36, y: 38 },
+      { x: 62, y: 52 },
+      { x: 84, y: 32 }
+    ];
+    return migrations.slice(0, 4).map(([phase, text], index) => ({
+      phase,
+      place: text.split(/[，,。；;]/)[0].slice(0, 16) || `${phase}线索`,
+      reason: text,
+      x: points[index]?.x ?? 50,
+      y: points[index]?.y ?? 45
+    }));
+  }
+
   function applyAiDraftToProfile(surname, draft) {
     const data = surnames[surname] || createPendingSurname(surname, { persist: false });
     const traditional = extractAiProfileField(draft, ["繁体", "繁體"]) || data.traditional || data.char;
@@ -733,6 +757,8 @@ function hydrateWorkspace() {
       ...parseAiFigures(extractAiSection(draft, "名人典故")),
       ...parseAiFigures(extractAiSection(draft, "家风家训"))
     ].slice(0, 8);
+    const parsedSources = parseAiSources(extractAiSection(draft, "参考来源"));
+    const parsedRisks = parseAiRisks(extractAiSection(draft, "审核风险"));
     data.traditional = traditional;
     data.pinyin = pinyin;
     data.dynasty = dynasty;
@@ -748,13 +774,18 @@ function hydrateWorkspace() {
       "堂号": tanghao
     };
     if (parsedOrigins.length) data.origins = parsedOrigins;
-    if (parsedMigrations.length) data.migrations = parsedMigrations;
+    if (parsedMigrations.length) {
+      data.migrations = parsedMigrations;
+      data.route = buildRouteFromMigrations(parsedMigrations);
+    }
     if (parsedBranches.length) data.branches = parsedBranches;
     if (parsedFigures.length) data.figures = parsedFigures;
+    if (parsedSources.length) data.sources = parsedSources;
+    if (parsedRisks.length) data.reviewRisks = parsedRisks;
     renderSurname(surname);
     syncProfileEditor();
-    persistWorkspace(`${surname}姓 AI 初稿已回填到校订字段，源流分支、迁徙路线等结构化内容已同步。`);
-    if (byId("profileEditStatus")) byId("profileEditStatus").textContent = `${surname}姓 AI 初稿已回填到校订字段，源流分支、迁徙路线等结构化内容已同步，请人工确认后保存并送审。`;
+    persistWorkspace(`${surname}姓 AI 初稿已回填到校订字段，源流分支、迁徙路线、参考来源、审核风险已同步。`);
+    if (byId("profileEditStatus")) byId("profileEditStatus").textContent = `${surname}姓 AI 初稿已回填到校订字段，源流分支、迁徙路线、参考来源、审核风险已同步，请人工确认后保存并送审。`;
   }
 
   function buildAiDraftPrompt(data, contextItems) {
@@ -1221,7 +1252,9 @@ function hydrateWorkspace() {
       </article>
     </div>`;
     byId("tab-sources").innerHTML = `<div class="source-list">${data.sources.map(item => `
-    <div class="source"><strong>${escapeHtml(item)}</strong><p>展示前需由文史编辑补充摘录、卷目和可信等级。</p></div>`).join("")}</div>`;
+    <div class="source"><strong>${escapeHtml(item)}</strong><p>展示前需由文史编辑补充摘录、卷目和可信等级。</p></div>`).join("")}</div>${Array.isArray(data.reviewRisks) && data.reviewRisks.length ? `
+    <div class="source-list">${data.reviewRisks.map(item => `
+    <div class="source"><strong>审核风险</strong><p>${escapeHtml(item)}</p></div>`).join("")}</div>` : ""}`;
     byId("cultureGrid").innerHTML = data.figures.map(item => `
     <article class="card">
       <h3>${escapeHtml(item.name)}</h3>
