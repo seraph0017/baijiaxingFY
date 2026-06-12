@@ -339,6 +339,20 @@ const invalidAiEndpointProtocol = await callRoute({
 await expectOk("AI Endpoint 协议错误返回 400", invalidAiEndpointProtocol.status === 400
   && /endpoint/.test(invalidAiEndpointProtocol.json?.error || ""));
 
+const invalidAiApiKey = await callRoute({
+  method: "POST",
+  url: "/api/ai-draft",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({
+    endpoint: "https://example.invalid/v1/chat/completions",
+    apiKey: "AI 接口调用失败，已回退到离线初稿",
+    model: "test-model",
+    messages: [{ role: "user", content: "test" }]
+  })
+});
+await expectOk("AI Key 非请求头安全字符返回 400", invalidAiApiKey.status === 400
+  && /AI apiKey/.test(invalidAiApiKey.json?.error || ""));
+
 const blockedAuditPath = join(runtimeDir, "audit.log");
 rmSync(blockedAuditPath, { force: true });
 mkdirSync(blockedAuditPath, { recursive: true });

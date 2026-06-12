@@ -660,7 +660,8 @@ function hydrateWorkspace() {
     })
     });
     if (!response.ok) {
-    throw new Error(`AI 代理返回 ${response.status}`);
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload.error || `AI 代理返回 ${response.status}`);
     }
     const payload = await response.json();
     return payload.payload?.choices?.[0]?.message?.content || "AI 已返回，但未解析到正文。";

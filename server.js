@@ -497,6 +497,9 @@ function validateAiConfigValue(config) {
   if (typeof config.apiKey !== "string" || !config.apiKey.trim()) {
     throw validationError("AI apiKey 必须是非空字符串");
   }
+  if (!/^[\x21-\x7E]+$/.test(config.apiKey.trim())) {
+    throw validationError("AI apiKey 只能包含 ASCII 可见字符，不能包含空格、中文或错误提示文本");
+  }
   if (typeof config.model !== "string" || !config.model.trim()) {
     throw validationError("AI model 必须是非空字符串");
   }
