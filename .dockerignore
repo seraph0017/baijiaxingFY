@@ -1,0 +1,8 @@
+node_modules
+.env
+*.log
+data/workspace.json
+data/audit.log
+data/feedback.jsonl
+data/backups
+.DS_Store

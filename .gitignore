@@ -1,0 +1,7 @@
+node_modules/
+.env
+data/workspace.json
+data/audit.log
+data/feedback.jsonl
+data/backups/
+*.log

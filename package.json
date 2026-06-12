@@ -1,0 +1,17 @@
+{
+  "name": "baijiaxing-suyuanlu-site",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "verify": "node verify-site.mjs",
+    "verify:server": "node verify-server.mjs",
+    "verify:logic": "node verify-server-logic.mjs",
+    "verify:auth": "node verify-server-auth.mjs",
+    "verify:production": "node verify-server-production.mjs",
+    "verify:ui": "node verify-ui.mjs",
+    "verify:release": "node verify-release.mjs"
+  }
+}
