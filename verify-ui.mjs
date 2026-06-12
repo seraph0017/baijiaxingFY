@@ -26,6 +26,11 @@ expectOk("登录页完整", loginHtml.includes('id="loginForm"') && ["loginUsern
 expectOk("后台用户会话入口", adminHtml.includes('id="currentUser"') && adminHtml.includes('id="logoutBtn"') && app.includes("function requireAdminSession") && app.includes("/api/auth/me") && app.includes("/api/auth/logout"));
 expectOk("后台 Harness 可配置", ["harnessEndpoint", "harnessModel", "harnessApiKey", "harnessSystemPrompt", "harnessTemperature", "harnessRetrievalQuery", "saveHarnessConfigBtn", "harnessConfigStatus"].every(id => adminIds.includes(id)) && app.includes("loadHarnessConfig") && app.includes("saveHarnessConfig") && app.includes("/api/harness-config"));
 expectOk("首屏工作台结构", html.includes('class="hero-panel"') && html.includes('class="ops-panel"') && html.includes("百家姓溯源录"));
+expectOk("首页可信证据可见", html.includes("多源并列") && html.includes("出处标注") && html.includes("人工审核") && /\.summary-grid\s*\{[^}]*display:\s*grid/.test(styles));
+expectOk("首页查询使用档案语言", html.includes('id="searchBtn">查档案</button>') && html.includes("姓氏 / 拼音"));
+expectOk("页面标题样式隔离", !/(^|\n)h1:after\s*\{/.test(styles) && /\.hero-copy h1:after/.test(styles) && !loginHtml.includes("AI 可信资料网络") && !adminHtml.includes("AI 可信资料网络"));
+expectOk("登录页独立后台入口", loginHtml.includes('class="login-card"') && loginHtml.includes('class="login-context"') && loginHtml.includes("文史编辑工作台"));
+expectOk("后台工作台指标区", adminHtml.includes('class="admin-overview"') && adminHtml.includes("待审核") && adminHtml.includes("待补来源") && adminHtml.includes("反馈工单") && adminHtml.includes("最近发布"));
 expectOk("核心模块完整", ["profile", "culture", "sources", "feedback"].every(id => html.includes(`id="${id}"`)) && adminHtml.includes('id="harness"'));
 expectOk("前台后台页面分区", ids.includes("publicView") && adminIds.includes("adminApp") && html.includes('href="/admin"') && adminHtml.includes('href="/"'));
 expectOk("查询控件完整", ["surnameInput", "searchBtn", "hotList", "dataReady"].every(id => ids.includes(id)));
@@ -50,6 +55,7 @@ expectOk("工作区快照恢复过滤脏数据", app.includes("function isUsable
 expectOk("工作区导入不回灌旧姓氏", app.includes("const importedDefaultSurname = Object.keys(surnames)[0]") && app.includes("renderSurname(importedDefaultSurname)") && !app.includes('renderSurname(importedDefaultSurname || "陈")') && !app.includes("renderSurname(getCurrentSurname())"));
 expectOk("工作区导入半成品档案可渲染", app.includes("function normalizeClientSurnameProfile") && /Object\.fromEntries\(Object\.entries\(snapshot\.surnames\)[\s\S]*?normalizeClientSurnameProfile\(item, key\)/.test(app));
 expectOk("热门姓氏宫格单字展示", app.includes('data-surname="${escapeHtml(name)}"') && app.includes('>${escapeHtml(name)}</button>') && !app.includes('${escapeHtml(name)}姓</button>'));
+expectOk("后台不渲染前台专属 DOM", app.includes("let currentSurname") && /function renderHotList\(\) \{[\s\S]*?const hotList = byId\("hotList"\);[\s\S]*?if \(!hotList\) return;/.test(app) && /function getCurrentSurname\(\) \{[\s\S]*?return resolveSurnameQuery\(byId\("surnameInput"\)\?\.value \|\| currentSurname\);/.test(app) && /async function initializeAdminApp\(\) \{[\s\S]*?setCurrentSurname\(surnames\["陈"\] \? "陈" : Object\.keys\(surnames\)\[0\]\);[\s\S]*?syncProfileEditor\(\);[\s\S]*?await loadHarnessConfig\(\);[\s\S]*?\}/.test(app) && !/async function initializeAdminApp\(\) \{[\s\S]*?renderSurname\(surnames\["陈"\]/.test(app));
 expectOk("详情姓氏水印绑定身份卡", app.includes('document.querySelector(".profile-head").dataset.surname = data.char') && /\.profile-head:after/.test(styles) && /content: attr\(data-surname\)/.test(styles));
 expectOk("详情身份卡可信信息胶囊", ids.includes("profileMeta") && app.includes('byId("profileMeta").innerHTML') && app.includes("profile-source-count") && app.includes("profile-review-status") && /\.profile-meta/.test(styles) && /\.meta-pill/.test(styles));
 expectOk("详情状态胶囊区分沉淀阶段", app.includes("function resolveProfileReviewStatus") && app.includes("已审核发布") && app.includes("来源待核") && app.includes("待收录") && app.includes("待补来源") && app.includes("resolveProfileReviewStatus(data, sourceCount)") && !app.includes('const reviewStatus = hasPublishedReview ? "已审核发布" : "待审核校订"'));
@@ -70,9 +76,9 @@ expectOk("前端迁徙空坐标回退", app.includes("value === null") && app.in
 expectOk("迁徙节点不依赖内联样式", !/style=/.test(app) && app.includes("data-route-x") && app.includes("data-route-y") && app.includes("function positionRouteNodes") && app.includes("positionRouteNodes()"));
 expectOk("公开 API 初始化支持沉淀型姓氏库", app.includes("async function hydratePublicApiWorkspace") && app.includes("/api/surnames?limit=500") && app.includes("/api/surname?name="));
 expectOk("前台拼音查询支持", app.includes("function resolveSurnameQuery") && app.includes("item.pinyin") && app.includes('item.info?.["拼音"]') && app.includes("resolveSurnameQuery(byId(\"surnameInput\").value)") && !app.includes("const value = normalizeSurnameInput(byId(\"surnameInput\").value);\n    renderSurname(value || \"陈\")"));
-expectOk("当前姓氏复用拼音解析", /function getCurrentSurname\(\) \{\s*return resolveSurnameQuery\(byId\("surnameInput"\)\.value\);\s*\}/.test(app));
+expectOk("当前姓氏复用拼音解析", /function getCurrentSurname\(\) \{\s*return resolveSurnameQuery\(byId\("surnameInput"\)\?\.value \|\| currentSurname\);\s*\}/.test(app));
 expectOk("未命中拼音不污染姓氏库", app.includes("function isLatinLikeQuery") && /\^\[a-z0-9\\s._-/.test(app) && /if \(isLatinLikeQuery\(raw\)\) return "陈";/.test(app));
 expectOk("复姓输入支持", app.includes("function normalizeSurnameInput") && app.includes("replace(/(姓氏|姓|氏)$/, \"\")") && app.includes("slice(0, 4)") && !app.includes(".value.trim().slice(0, 1)") && !app.includes("String(name || \"\").trim().slice(0, 1)"));
 expectOk("姓氏双字后缀归一化", app.includes("replace(/(姓氏|姓|氏)$/, \"\")"));
 
-console.log("UI 结构检查通过：56/56");
+console.log("UI 结构检查通过：62/62");

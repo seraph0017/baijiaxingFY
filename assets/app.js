@@ -5,6 +5,7 @@ let feedbackState = [];
 let auditState = [];
 let workspaceSaveChain = Promise.resolve();
 let workspaceSaveVersion = 0;
+let currentSurname = "陈";
 
   const STORAGE_KEY = "baijiaxing-suyuanlu-workspace-v1";
 
@@ -404,7 +405,11 @@ function hydrateWorkspace() {
     renderRepositoryStats();
     renderReviewQueue();
     const importedDefaultSurname = Object.keys(surnames)[0];
-    renderSurname(importedDefaultSurname);
+    if (byId("publicView")) renderSurname(importedDefaultSurname);
+    else {
+    setCurrentSurname(importedDefaultSurname);
+    syncProfileEditor();
+    }
     } catch (error) {
     byId("workspaceStatus").textContent = `导入失败：${error.message}`;
     }
@@ -422,7 +427,9 @@ function hydrateWorkspace() {
   }
 
   function renderHotList() {
-    byId("hotList").innerHTML = Object.keys(surnames).map(name => (
+    const hotList = byId("hotList");
+    if (!hotList) return;
+    hotList.innerHTML = Object.keys(surnames).map(name => (
     `<button class="chip" data-surname="${escapeHtml(name)}">${escapeHtml(name)}</button>`
     )).join("");
   }
@@ -455,7 +462,12 @@ function hydrateWorkspace() {
   }
 
   function getCurrentSurname() {
-    return resolveSurnameQuery(byId("surnameInput").value);
+    return resolveSurnameQuery(byId("surnameInput")?.value || currentSurname);
+  }
+
+  function setCurrentSurname(name) {
+    currentSurname = normalizeSurnameInput(name, currentSurname || "陈");
+    return currentSurname;
   }
 
   function getSelectedSourceTypes() {
@@ -555,7 +567,11 @@ function hydrateWorkspace() {
     renderHotList();
     renderRepositoryStats();
     renderReviewQueue();
-    renderSurname(created[0]);
+    if (byId("publicView")) renderSurname(created[0]);
+    else {
+      setCurrentSurname(created[0]);
+      syncProfileEditor();
+    }
     persistWorkspace(`已批量加入 ${created.length} 个待收录姓氏。`);
     }
     byId("batchSurnameInput").value = "";
@@ -991,6 +1007,11 @@ function hydrateWorkspace() {
     const data = surnames[name] || createPendingSurname(name);
     const sourceCount = Array.isArray(data.sources) ? data.sources.length : 0;
     const reviewStatus = resolveProfileReviewStatus(data, sourceCount);
+    setCurrentSurname(data.char);
+    if (!byId("surnameInput") || !byId("profileTitle")) {
+    syncProfileEditor();
+    return;
+    }
     byId("surnameInput").value = data.char;
     document.querySelector(".profile-head").dataset.surname = data.char;
     byId("surnameMark").textContent = data.char;
@@ -1151,10 +1172,10 @@ function hydrateWorkspace() {
   async function initializeAdminApp() {
     await requireAdminSession();
     const serverReady = await initializeWorkspace();
-    renderHotList();
     renderRepositoryStats();
     renderReviewQueue();
-    renderSurname(surnames["陈"] ? "陈" : Object.keys(surnames)[0]);
+    setCurrentSurname(surnames["陈"] ? "陈" : Object.keys(surnames)[0]);
+    syncProfileEditor();
     renderFeedbackQueue();
     renderAuditTrail();
     if (byId("dataReady")) byId("dataReady").textContent = serverReady ? "JSON 持久化已连接" : "本地模式可用";
@@ -1248,7 +1269,11 @@ function hydrateWorkspace() {
     }
     const target = event.target.closest("[data-review]");
     if (!target) return;
-    renderSurname(target.dataset.review);
+    if (byId("publicView")) renderSurname(target.dataset.review);
+    else {
+    setCurrentSurname(target.dataset.review);
+    syncProfileEditor();
+    }
     document.querySelector("#profileEditor").scrollIntoView({ behavior: "smooth" });
   });
   on("feedbackQueue", "click", event => {

@@ -43,19 +43,19 @@
         <div class="hero-copy">
           <span class="eyebrow">百家姓溯源录 · AI 可信资料库</span>
           <h1>百家姓溯源录</h1>
-          <p class="lead">用 AI 把中华姓氏文明整理成可信资料网络。输入姓氏，查询起源、始祖、郡望、图腾、迁徙路线、历史名人与家风文化。</p>
+          <p class="lead">把中华姓氏文明整理成可查询、可追溯、可审核的数字档案。输入姓氏，查询起源、始祖、郡望、迁徙路线、历史名人与家风文化。</p>
           <div class="summary-grid">
-            <div class="metric"><strong>多源流</strong><span>并列展示，不武断定论</span></div>
-            <div class="metric"><strong>RAG</strong><span>Markdown 检索上下文</span></div>
-            <div class="metric"><strong>审核</strong><span>来源与状态闭环</span></div>
+            <div class="metric"><strong>多源并列</strong><span>源流线索并列展示，不武断定论</span></div>
+            <div class="metric"><strong>出处标注</strong><span>典籍、方志与线索分级呈现</span></div>
+            <div class="metric"><strong>人工审核</strong><span>AI 初稿进入编辑闭环</span></div>
           </div>
         </div>
         <aside class="ops-panel" aria-label="姓氏查询">
           <div class="panel-kicker"><span>Node 服务</span><strong id="dataReady">后端连接中</strong></div>
-          <h2>姓氏查询</h2>
+          <h2>档案检索</h2>
           <div class="query-row">
-            <input id="surnameInput" value="陈" maxlength="4" aria-label="输入姓氏">
-            <button id="searchBtn">查询</button>
+            <input id="surnameInput" value="陈" maxlength="4" placeholder="姓氏 / 拼音" aria-label="输入姓氏或拼音">
+            <button id="searchBtn">查档案</button>
           </div>
           <p class="muted">支持姓氏或拼音查询。未知姓氏会生成待收录档案，可继续补资料、跑 AI 初稿。</p>
           <div class="hot-list" id="hotList"></div>
