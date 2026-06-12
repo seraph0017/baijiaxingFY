@@ -67,6 +67,8 @@ expectOk("运营审计事件台", ["auditTrail", "refreshAuditBtn"].every(id => 
 expectOk("审计请求 ID 可见", app.includes("audit-request-id") && app.includes("请求 ID") && app.includes("item.requestId") && /\.audit-request-id/.test(styles) && /word-break:\s*break-all/.test(styles));
 expectOk("审核队列稳定 ID", app.includes("function stableReviewId") && app.includes("function normalizeReviewItem") && app.includes("function createReviewItem") && app.includes("data-review-id") && app.includes("updateReviewStatus(actionTarget.dataset.reviewId") && app.includes("entry.id === id") && app.includes("发布到前台") && app.includes("退回补资料") && app.includes("待补资料") && !app.includes("data-title="));
 expectOk("AI Harness 服务端代理优先", app.includes("const draft = await callAiModel") && app.includes("服务端 AI 代理") && !app.includes("apiKey\n      ? await callAiModel"));
+expectOk("AI 初稿字段充实约束", app.includes("slice(0, 8)") && app.includes("每个字段必须给出可审核内容") && app.includes("不要把字段值写成“待补充”") && app.includes("基础档案：") && app.includes("源流分支：") && app.includes("迁徙路线：") && app.includes("望族分支：") && app.includes("名人典故：") && app.includes("家风家训：") && app.includes("参考来源：") && app.includes("审核风险："));
+expectOk("新姓氏默认字段不裸写待补充", app.includes("function buildPendingFieldHints") && app.includes("需核：普通话读音") && app.includes("需核：查郡望资料") && app.includes("需核：查堂号资料") && !app.includes('pinyin: "待补充"') && !app.includes('"拼音": "待补充"'));
 expectOk("AI Harness 页面文案同步", adminHtml.includes("优先调用服务端 AI 代理") && !adminHtml.includes("未填写 Key 时走离线样例"));
 expectOk("移动端布局", /@media \(max-width: 900px\)/.test(styles) && /\.hero-panel/.test(styles));
 expectOk("打印导出样式", /@media print/.test(styles) && /window\.print/.test(app));
@@ -83,4 +85,4 @@ expectOk("未命中拼音不污染姓氏库", app.includes("function isLatinLike
 expectOk("复姓输入支持", app.includes("function normalizeSurnameInput") && app.includes("replace(/(姓氏|姓|氏)$/, \"\")") && app.includes("slice(0, 4)") && !app.includes(".value.trim().slice(0, 1)") && !app.includes("String(name || \"\").trim().slice(0, 1)"));
 expectOk("姓氏双字后缀归一化", app.includes("replace(/(姓氏|姓|氏)$/, \"\")"));
 
-console.log("UI 结构检查通过：64/64");
+console.log("UI 结构检查通过：66/66");

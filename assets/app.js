@@ -487,31 +487,32 @@ function hydrateWorkspace() {
     const { persist = true } = options;
     const char = normalizeSurnameInput(name, "新");
     if (surnames[char]) return surnames[char];
+    const hints = buildPendingFieldHints(char);
     const pending = {
     char,
-    pinyin: "待补充",
+    pinyin: hints.pinyin,
     traditional: char,
-    dynasty: "待考",
-    ancestor: "待考",
+    dynasty: hints.dynasty,
+    ancestor: hints.ancestor,
     summary: `${char}姓暂未进入正式样板库，已创建待收录档案。可先新增资料、生成 AI 初稿，再进入文史审核。`,
     tags: ["待收录", "AI 初稿", "资料待补", "人工审核"],
     info: {
       "繁体": char,
-      "拼音": "待补充",
-      "起源朝代": "待考",
-      "得姓始祖": "待考",
-      "郡望": "待补充",
-      "堂号": "待补充"
+      "拼音": hints.pinyin,
+      "起源朝代": hints.dynasty,
+      "得姓始祖": hints.ancestor,
+      "郡望": hints.junwang,
+      "堂号": hints.tanghao
     },
     origins: [
       { title: "待收录源流", text: "当前姓氏尚缺少足够上下文。请先新增典籍、地方志或公开资料摘录。", level: "待补来源" },
       { title: "AI 整理入口", text: "资料入库后，Harness 会按来源、迁徙、名人、家风等字段生成初稿。", level: "AI 初稿" }
     ],
     migrations: [
-      ["秦汉", "待补充迁徙线索。"],
-      ["魏晋南北朝", "待补充迁徙线索。"],
-      ["唐宋元明清", "待补充迁徙线索。"],
-      ["近现代", "待补充全国分布与宗亲资料。"]
+      ["秦汉", hints.migrationEarly],
+      ["魏晋南北朝", hints.migrationMiddle],
+      ["唐宋元明清", hints.migrationLate],
+      ["近现代", hints.migrationModern]
     ],
     route: [
       { phase: "待补", place: "发源地待考", reason: "需新增来源资料", x: 10, y: 50 },
@@ -526,11 +527,11 @@ function hydrateWorkspace() {
       stages: ["待", "补", "字", char]
     },
     figures: [
-      { name: "待收录名人", desc: "新增资料后由 AI 抽取人物线索，编辑审核后发布。", type: "待审核" },
-      { name: "待收录典故", desc: "民间故事需独立标注来源与可信等级。", type: "典故线索" },
-      { name: "待收录家风", desc: "家训原文和白话释义需确认出处或授权。", type: "家风家训" }
+      { name: `${char}姓名人线索`, desc: "需核：查正史人物传、地方志人物条目和公开姓氏人物资料后再写入。", type: "待核人物" },
+      { name: `${char}姓典故线索`, desc: "需核：查地方文献、宗族故事和公开资料，区分传说与可证事实。", type: "典故线索" },
+      { name: `${char}姓家风线索`, desc: "需核：查族谱序言、宗祠楹联、家训文本或地方志艺文资料。", type: "家风家训" }
     ],
-    sources: ["待新增 Markdown 资料", "待文史编辑补充来源"]
+    sources: [`需核：补充${char}姓源流资料`, `需核：补充${char}姓郡望、迁徙、人物和家风资料`]
     };
     surnames[char] = pending;
     reviewState.unshift(createReviewItem(char, `${char}姓待收录档案`, "待审核", "运营整理"));
@@ -541,6 +542,20 @@ function hydrateWorkspace() {
     persistWorkspace(`${char}姓待收录档案已保存。`);
     }
     return pending;
+  }
+
+  function buildPendingFieldHints(char) {
+    return {
+      pinyin: "需核：普通话读音和异读",
+      dynasty: "需核：查姓氏典籍与地方志",
+      ancestor: "需核：查得姓始祖和多源流记载",
+      junwang: "需核：查郡望资料",
+      tanghao: "需核：查堂号资料",
+      migrationEarly: `需核：查${char}姓早期发源地、封国或郡县线索。`,
+      migrationMiddle: `需核：查${char}姓中古时期郡望形成、南北迁徙和地方志线索。`,
+      migrationLate: `需核：查${char}姓唐宋至明清族谱、移民和地域分支资料。`,
+      migrationModern: `需核：查${char}姓近现代分布、宗亲资料和公开统计线索。`
+    };
   }
 
   function parseBatchSurnames(raw) {
@@ -614,22 +629,49 @@ function hydrateWorkspace() {
     })
     .filter(item => item.score > 0)
     .sort((a, b) => b.score - a.score)
-    .slice(0, 3);
+    .slice(0, 8);
   }
 
   function buildOfflineDraft(surname, contextItems) {
     const data = surnames[surname] || surnames["陈"];
     const contextText = contextItems.map(item => `- ${item.title}：${item.content}`).join("\n");
+    const originLines = data.origins.map((item, index) => `${index + 1}. ${item.title}（${item.level}）：${item.text || "需按公开资料继续核验。"} `).join("\n");
+    const migrationLines = data.migrations.map(([phase, text]) => `- ${phase}：${text}`).join("\n");
+    const branchLines = (data.branches || []).map(item => `- ${item}`).join("\n");
+    const figureLines = data.figures.map(item => `- ${item.name}：${item.desc}（${item.type}）`).join("\n");
     return [
     `【${data.char}姓 AI 初稿】`,
-    `基础档案：${data.char}，繁体 ${data.traditional}，拼音 ${data.pinyin}，起源朝代 ${data.dynasty}，得姓始祖线索 ${data.ancestor}。`,
-    `源流摘要：${data.summary}`,
-    `多源流分支：${data.origins.map(item => `${item.title}（${item.level}）`).join("；")}。`,
-    `迁徙时间轴：${data.migrations.map(([phase, text]) => `${phase}：${text}`).join(" / ")}。`,
-    `名人典故与家风：${data.figures.map(item => `${item.name}：${item.type}`).join("；")}。`,
-    `召回上下文：\n${contextText || "- 未召回资料，请调整来源或关键词。"}`,
-    "审核提示：此为 AI 初稿，需补充典籍卷目、出处摘录、可信等级和争议说明后再发布。"
+    `基础档案：姓氏=${data.char}；繁体=${data.traditional || data.char}；拼音=${data.pinyin || data.info?.["拼音"] || "需核音"}；起源朝代=${data.dynasty || data.info?.["起源朝代"] || "需按资料核定"}；得姓始祖=${data.ancestor || data.info?.["得姓始祖"] || "需按资料核定"}；郡望=${data.info?.["郡望"] || "需查地方志和郡望资料"}；堂号=${data.info?.["堂号"] || "需查族谱和堂号资料"}。`,
+    `源流摘要：${data.summary} 编辑审核时应把确定记载、常见说法和待核传说分开，不把单一线索写成定论。`,
+    `源流分支：\n${originLines}`,
+    `迁徙路线：\n${migrationLines}`,
+    `望族分支：\n${branchLines || `- ${data.char}姓望族、郡望和分支需结合地方志、族谱目录和公开姓氏资料继续核验。`}`,
+    `名人典故：\n${figureLines}`,
+    `家风家训：\n- 可先围绕族谱序言、地方志人物传、宗祠楹联和公开家训材料建立线索。\n- 当前初稿不得虚构具体家训原文；缺少出处时标为“待核线索”。`,
+    `参考来源：\n${contextText || `- 暂未召回本地资料。建议先补充${data.char}姓源流、郡望、迁徙、人物和家风资料，再重新生成。`}`,
+    "审核风险：\n- 区分正史/地方志/族谱/民间传说，不做唯一源流定论。\n- 对始祖、发源地、郡望、堂号、人物故事逐条补出处。\n- 没有明确证据的内容保留为“待核线索”，不得写成确定事实。"
     ].join("\n\n");
+  }
+
+  function buildAiDraftPrompt(data, contextItems) {
+    const contextText = contextItems.length
+      ? contextItems.map((item, index) => `## 资料 ${index + 1}：${item.title}\n类型：${item.type || "local"}\n${item.content}`).join("\n\n")
+      : "未召回本地资料。请基于通用姓氏整理框架生成可审核初稿，并明确标注需要查证的方向。";
+    return [
+      `请根据上下文生成${data.char}姓结构化初稿，内容要比普通摘要更完整。`,
+      "输出必须使用以下 8 个字段标题，顺序不要变：",
+      "1. 基础档案：写明简体、繁体、拼音、起源朝代线索、得姓始祖线索、郡望、堂号。每个字段必须给出可审核内容，资料不足时写“需核：建议查证某类资料”，不要把字段值写成“待补充”。",
+      "2. 源流分支：至少 3 条，区分典籍记载、地方志线索、族谱/民间说法，并标注可信等级。",
+      "3. 迁徙路线：至少 4 个阶段，按先秦/秦汉、魏晋南北朝、唐宋元明清、近现代组织，写出地域方向和待核证据。",
+      "4. 望族分支：至少 3 条，围绕郡望、堂号、地域分支、宗族资料线索展开。",
+      "5. 名人典故：至少 3 条，缺少确定人物时写可查证的人物资料方向，不编造具体事实。",
+      "6. 家风家训：至少 2 条，缺少原文时写可查证的家风材料方向，不编造原文。",
+      "7. 参考来源：列出已召回资料；如果没有资料，列出下一步最该补的资料类型。",
+      "8. 审核风险：列出 3-5 条需要人工核对的争议点。",
+      "整体要求：不要只输出“待补充”；每一项都要有可读内容；不确定内容必须写成“待核线索”或“建议查证方向”；不要做唯一源流定论。",
+      "上下文：",
+      contextText
+    ].join("\n");
   }
 
   function addCorpusSource() {
@@ -667,12 +709,7 @@ function hydrateWorkspace() {
     },
     {
       role: "user",
-      content: [
-      `请根据上下文生成${data.char}姓结构化初稿。`,
-      "字段：基础档案、源流分支、迁徙路线、望族分支、名人典故、家风家训、参考来源、审核风险。",
-      "上下文：",
-      contextItems.map(item => `## ${item.title}\n${item.content}`).join("\n\n")
-      ].join("\n")
+      content: buildAiDraftPrompt(data, contextItems)
     }
     ];
     const response = await fetch("/api/ai-draft", {
