@@ -13,5 +13,8 @@
     "verify:production": "node verify-server-production.mjs",
     "verify:ui": "node verify-ui.mjs",
     "verify:release": "node verify-release.mjs"
+  },
+  "dependencies": {
+    "mysql2": "^3.22.5"
   }
 }

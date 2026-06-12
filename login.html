@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="百家姓溯源录，中华姓氏文化科普数据库，提供姓氏源流、迁徙、名人典故与家风家训查询。">
+  <meta name="robots" content="index, follow">
+  <meta name="theme-color" content="#C81623">
+  <meta property="og:title" content="百家姓溯源录 - 中华姓氏文化科普数据库">
+  <meta property="og:description" content="AI 智能梳理姓氏源流、迁徙、名人典故与家风文化，配套 Markdown 资料沉淀和人工审核流程。">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="__SITE_ORIGIN__/index.html">
+  <meta property="og:site_name" content="百家姓溯源录">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="百家姓溯源录">
+  <meta name="twitter:description" content="中华姓氏文化科普数据库网站 MVP。">
+  <title>登录 - 百家姓溯源录</title>
+  <link rel="canonical" href="__SITE_ORIGIN__/index.html">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="assets/styles.css">
+ </head>
+<body class="app-shell login-shell">
+  <main class="login-page">
+    <section class="login-panel">
+      <a class="brand" href="/index.html" aria-label="返回首页"><span class="seal">姓</span><span><strong>百家姓溯源录</strong><small>资料整理后台登录</small></span></a>
+      <h1>后台登录</h1>
+      <form id="loginForm" class="login-form">
+        <label for="loginUsername">账号</label>
+        <input id="loginUsername" autocomplete="username" value="admin">
+        <label for="loginPassword">密码</label>
+        <input id="loginPassword" type="password" autocomplete="current-password">
+        <button id="loginSubmit" type="submit">登录</button>
+        <div class="source-status" id="loginStatus"></div>
+      </form>
+    </section>
+  </main>
+  <script src="assets/app.js" defer></script>
+</body>
+</html>

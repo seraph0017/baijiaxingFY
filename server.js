@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,6 +13,9 @@ const workspacePath = join(dataDir, "workspace.json");
 const seedWorkspacePath = join(rootDir, "data", "seed-workspace.json");
 const auditPath = join(dataDir, "audit.log");
 const feedbackPath = join(dataDir, "feedback.jsonl");
+const usersPath = join(dataDir, "users.json");
+const sessionsPath = join(dataDir, "sessions.json");
+const harnessConfigPath = join(dataDir, "harness-config.json");
 const readEnvText = (name) => String(process.env[name] || "").trim();
 const readPositiveIntegerEnv = (name, fallback) => {
   const value = Number.parseInt(readEnvText(name), 10);
@@ -38,6 +41,10 @@ const readSiteOriginEnv = (fallback) => {
 };
 const isProduction = process.env.NODE_ENV === "production";
 const adminToken = readEnvText("ADMIN_TOKEN");
+const authBootstrapUser = readEnvText("AUTH_BOOTSTRAP_USER") || "admin";
+const authBootstrapPassword = readEnvText("AUTH_BOOTSTRAP_PASSWORD");
+const authSessionCookie = "bjx_session";
+const authSessionTtlMs = readPositiveIntegerEnv("AUTH_SESSION_TTL_HOURS", 24) * 60 * 60 * 1000;
 const defaultAiEndpoint = readEnvText("AI_ENDPOINT");
 const defaultAiApiKey = readEnvText("AI_API_KEY");
 const configuredAiModel = readEnvText("AI_MODEL");
@@ -51,6 +58,8 @@ const rateBuckets = new Map();
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const WRITE_LIMIT_PER_MINUTE = readPositiveIntegerEnv("WRITE_LIMIT_PER_MINUTE", 60);
 const AI_LIMIT_PER_MINUTE = readPositiveIntegerEnv("AI_LIMIT_PER_MINUTE", 12);
+const mysqlConfigured = Boolean(readEnvText("DATABASE_URL") || readEnvText("MYSQL_HOST"));
+let mysqlPoolPromise = null;
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -109,6 +118,10 @@ function assignRequestId(req, res) {
 
 const apiAllowedMethods = new Map([
   ["/api/health", "GET, HEAD"],
+  ["/api/auth/login", "POST"],
+  ["/api/auth/me", "GET"],
+  ["/api/auth/logout", "POST"],
+  ["/api/harness-config", "GET, PUT"],
   ["/api/bootstrap", "GET"],
   ["/api/surnames", "GET"],
   ["/api/surname", "GET"],
@@ -176,7 +189,197 @@ function enforceRateLimit(req, scope, limit) {
   }
 }
 
+function parseCookies(req) {
+  const raw = String(req.headers.cookie || "");
+  return Object.fromEntries(raw.split(";")
+    .map(part => part.trim())
+    .filter(Boolean)
+    .map(part => {
+      const index = part.indexOf("=");
+      if (index === -1) return [part, ""];
+      return [part.slice(0, index), decodeURIComponent(part.slice(index + 1))];
+    }));
+}
+
+function createCookie(name, value, options = {}) {
+  const parts = [`${name}=${encodeURIComponent(value)}`, "Path=/", "HttpOnly", "SameSite=Lax"];
+  if (options.maxAge !== undefined) parts.push(`Max-Age=${options.maxAge}`);
+  if (isProduction) parts.push("Secure");
+  return parts.join("; ");
+}
+
+function readJsonFile(filePath, fallback) {
+  if (!existsSync(filePath)) return fallback;
+  try {
+    return JSON.parse(readFileSync(filePath, "utf8"));
+  } catch {
+    return fallback;
+  }
+}
+
+async function getMysqlPool() {
+  if (!mysqlConfigured) return null;
+  if (!mysqlPoolPromise) {
+    mysqlPoolPromise = import("mysql2/promise").then(({ createPool }) => {
+      const databaseUrl = readEnvText("DATABASE_URL");
+      if (databaseUrl) {
+        return createPool({
+          uri: databaseUrl,
+          waitForConnections: true,
+          connectionLimit: readPositiveIntegerEnv("MYSQL_CONNECTION_LIMIT", 10)
+        });
+      }
+      return createPool({
+        host: readEnvText("MYSQL_HOST") || "127.0.0.1",
+        port: readPortEnv("MYSQL_PORT", 3306),
+        database: readEnvText("MYSQL_DATABASE") || "baijiaxingfy",
+        user: readEnvText("MYSQL_USER") || "baijiaxing",
+        password: readEnvText("MYSQL_PASSWORD"),
+        waitForConnections: true,
+        connectionLimit: readPositiveIntegerEnv("MYSQL_CONNECTION_LIMIT", 10)
+      });
+    });
+  }
+  return mysqlPoolPromise;
+}
+
+async function ensureMysqlSchema() {
+  const pool = await getMysqlPool();
+  if (!pool) return null;
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS app_kv (
+      name VARCHAR(128) PRIMARY KEY,
+      payload JSON NOT NULL,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+  return pool;
+}
+
+async function readMysqlJson(name, fallback) {
+  const pool = await ensureMysqlSchema();
+  if (!pool) return fallback;
+  const [rows] = await pool.query("SELECT payload FROM app_kv WHERE name = ? LIMIT 1", [name]);
+  if (!rows.length) return fallback;
+  return typeof rows[0].payload === "string" ? JSON.parse(rows[0].payload) : rows[0].payload;
+}
+
+async function writeMysqlJson(name, payload) {
+  const pool = await ensureMysqlSchema();
+  if (!pool) return false;
+  await pool.query(
+    "INSERT INTO app_kv (name, payload) VALUES (?, CAST(? AS JSON)) ON DUPLICATE KEY UPDATE payload = VALUES(payload)",
+    [name, JSON.stringify(payload)]
+  );
+  return true;
+}
+
+function hashPassword(password, salt = randomBytes(16).toString("hex")) {
+  const digest = createHash("sha256").update(`${salt}:${password}`).digest("hex");
+  return `sha256:${salt}:${digest}`;
+}
+
+function verifyPassword(password, encoded) {
+  const parts = String(encoded || "").split(":");
+  if (parts.length !== 3 || parts[0] !== "sha256") return false;
+  const expected = hashPassword(password, parts[1]);
+  const actualBuffer = Buffer.from(String(encoded));
+  const expectedBuffer = Buffer.from(expected);
+  return actualBuffer.length === expectedBuffer.length && timingSafeEqual(actualBuffer, expectedBuffer);
+}
+
+function publicUser(user) {
+  return user ? {
+    id: user.id,
+    username: user.username,
+    role: user.role,
+    displayName: user.displayName || user.username
+  } : null;
+}
+
+function readUsers() {
+  ensureDataDir();
+  const payload = readJsonFile(usersPath, { users: [] });
+  const users = Array.isArray(payload.users) ? payload.users : [];
+  if (!users.length && authBootstrapPassword) {
+    const bootstrap = {
+      id: "user-admin",
+      username: authBootstrapUser,
+      displayName: "系统管理员",
+      role: "admin",
+      passwordHash: hashPassword(authBootstrapPassword),
+      createdAt: new Date().toISOString()
+    };
+    writeJsonFileAtomic(usersPath, { users: [bootstrap] });
+    return [bootstrap];
+  }
+  return users;
+}
+
+function writeUsers(users) {
+  ensureDataDir();
+  writeJsonFileAtomic(usersPath, { users });
+}
+
+async function hydrateMysqlRuntimeState() {
+  if (!mysqlConfigured) return;
+  ensureDataDir();
+  const [usersPayload, sessionsPayload, harnessPayload, workspacePayload, feedbackPayload, auditPayload] = await Promise.all([
+    readMysqlJson("users", null),
+    readMysqlJson("sessions", null),
+    readMysqlJson("harness-config", null),
+    readMysqlJson("workspace", null),
+    readMysqlJson("feedback", null),
+    readMysqlJson("audit", null)
+  ]);
+  if (usersPayload) writeJsonFileAtomic(usersPath, usersPayload);
+  if (sessionsPayload) writeJsonFileAtomic(sessionsPath, sessionsPayload);
+  if (harnessPayload) writeJsonFileAtomic(harnessConfigPath, harnessPayload);
+  if (workspacePayload) writeJsonFileAtomic(workspacePath, workspacePayload);
+  if (feedbackPayload?.items) writeTextFileAtomic(feedbackPath, `${feedbackPayload.items.map(item => JSON.stringify(item)).join("\n")}${feedbackPayload.items.length ? "\n" : ""}`);
+  if (auditPayload?.items) writeTextFileAtomic(auditPath, `${auditPayload.items.map(item => JSON.stringify(item)).join("\n")}${auditPayload.items.length ? "\n" : ""}`);
+}
+
+async function persistMysqlRuntimeState(name, payload) {
+  if (!mysqlConfigured) return;
+  await writeMysqlJson(name, payload);
+}
+
+function readSessions() {
+  ensureDataDir();
+  const payload = readJsonFile(sessionsPath, { sessions: [] });
+  const sessions = Array.isArray(payload.sessions) ? payload.sessions : [];
+  const now = Date.now();
+  const active = sessions.filter(item => Date.parse(item.expiresAt || "") > now);
+  if (active.length !== sessions.length) writeJsonFileAtomic(sessionsPath, { sessions: active });
+  return active;
+}
+
+function writeSessions(sessions) {
+  ensureDataDir();
+  writeJsonFileAtomic(sessionsPath, { sessions });
+}
+
+function findSessionUser(req) {
+  const sid = parseCookies(req)[authSessionCookie];
+  if (!sid) return null;
+  const sessions = readSessions();
+  const session = sessions.find(item => item.id === sid);
+  if (!session) return null;
+  const user = readUsers().find(item => item.id === session.userId);
+  return user || null;
+}
+
+function requireSession(req, roles = []) {
+  const user = findSessionUser(req);
+  if (!user) throw httpError("请先登录", 401);
+  if (roles.length && !roles.includes(user.role)) throw httpError("当前用户无权限", 403);
+  return user;
+}
+
 function requireAdmin(req) {
+  const sessionUser = findSessionUser(req);
+  if (sessionUser && ["admin", "editor"].includes(sessionUser.role)) return sessionUser;
   if (!adminToken && isProduction) {
     throw httpError("生产环境必须设置 ADMIN_TOKEN", 503);
   }
@@ -185,6 +388,16 @@ function requireAdmin(req) {
   if (provided !== adminToken) {
     throw httpError("缺少或错误的管理令牌", 401);
   }
+  return { id: "admin-token", username: "admin-token", role: "admin", displayName: "管理令牌" };
+}
+
+function requireHarnessAdmin(req) {
+  const sessionUser = findSessionUser(req);
+  if (sessionUser) {
+    if (sessionUser.role !== "admin") throw httpError("只有管理员可配置 Harness", 403);
+    return sessionUser;
+  }
+  return requireAdmin(req);
 }
 
 function readJsonBody(req) {
@@ -256,24 +469,12 @@ function getStorageStatus() {
 function getMissingProductionConfig() {
   const missing = [];
   if (isProduction && !adminToken) missing.push("ADMIN_TOKEN");
-  if (isProduction && (!defaultAiEndpoint || !defaultAiApiKey)) missing.push("AI_ENDPOINT 和 AI_API_KEY");
   return missing;
 }
 
 function getConfigStatus() {
   const missing = getMissingProductionConfig();
   let invalid = false;
-  if (isProduction && !missing.length) {
-    try {
-      validateAiConfigValue({
-        endpoint: defaultAiEndpoint,
-        apiKey: defaultAiApiKey,
-        model: defaultAiModel
-      });
-    } catch {
-      invalid = true;
-    }
-  }
   return {
     configReady: missing.length === 0 && !invalid,
     configError: missing.length || invalid ? "生产配置未就绪" : ""
@@ -301,17 +502,85 @@ function validateAiConfigValue(config) {
   }
 }
 
+function defaultHarnessConfig() {
+  return {
+    endpoint: defaultAiEndpoint || "https://api.openai.com/v1/chat/completions",
+    model: defaultAiModel,
+    apiKey: defaultAiApiKey || "",
+    systemPrompt: "你是中华姓氏文化资料整理助手。只输出科普初稿，不做定论。必须区分多源流、民间传说、待核来源。",
+    temperature: 0.3,
+    retrievalQuery: "源流 始祖 郡望 迁徙 名人 家风 来源",
+    sourceTypes: ["classic", "local"],
+    updatedAt: ""
+  };
+}
+
+function readHarnessConfigRaw() {
+  ensureDataDir();
+  const saved = readJsonFile(harnessConfigPath, {});
+  return { ...defaultHarnessConfig(), ...saved };
+}
+
+function sanitizeHarnessConfig(config) {
+  return {
+    endpoint: config.endpoint,
+    model: config.model,
+    systemPrompt: config.systemPrompt,
+    temperature: config.temperature,
+    retrievalQuery: config.retrievalQuery,
+    sourceTypes: Array.isArray(config.sourceTypes) ? config.sourceTypes : ["classic", "local"],
+    hasApiKey: Boolean(config.apiKey),
+    updatedAt: config.updatedAt || ""
+  };
+}
+
+function normalizeHarnessConfigPayload(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw validationError("Harness 配置必须是 JSON 对象");
+  }
+  const current = readHarnessConfigRaw();
+  const next = {
+    ...current,
+    endpoint: String(payload.endpoint || current.endpoint || "").trim(),
+    model: String(payload.model || current.model || defaultAiModel).trim(),
+    apiKey: payload.apiKey === undefined ? current.apiKey : String(payload.apiKey || "").trim(),
+    systemPrompt: String(payload.systemPrompt || current.systemPrompt || "").trim(),
+    temperature: Number(payload.temperature ?? current.temperature ?? 0.3),
+    retrievalQuery: String(payload.retrievalQuery || current.retrievalQuery || "").trim(),
+    sourceTypes: Array.isArray(payload.sourceTypes) && payload.sourceTypes.length
+      ? payload.sourceTypes.map(item => String(item).trim()).filter(Boolean)
+      : current.sourceTypes
+  };
+  validateAiConfigValue({
+    endpoint: next.endpoint,
+    apiKey: next.apiKey || "placeholder-key",
+    model: next.model
+  });
+  if (!next.systemPrompt) throw validationError("Harness systemPrompt 不能为空");
+  if (!Number.isFinite(next.temperature) || next.temperature < 0 || next.temperature > 2) {
+    throw validationError("Harness temperature 必须在 0 到 2 之间");
+  }
+  next.updatedAt = new Date().toISOString();
+  return next;
+}
+
+function saveHarnessConfig(payload) {
+  const config = normalizeHarnessConfigPayload(payload);
+  ensureDataDir();
+  writeJsonFileAtomic(harnessConfigPath, config);
+  return config;
+}
+
 function resolveAiConfig(payload) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     throw validationError("AI 请求必须是 JSON 对象");
   }
-  if (isProduction && (!defaultAiEndpoint || !defaultAiApiKey)) {
-    throw httpError(`生产环境必须设置 ${getMissingProductionConfig().join("、")}`, 503);
-  }
+  const harnessConfig = readHarnessConfigRaw();
   const config = {
-    endpoint: defaultAiEndpoint || payload.endpoint,
-    apiKey: defaultAiApiKey || payload.apiKey,
-    model: configuredAiModel || payload.model || defaultAiModel
+    endpoint: defaultAiEndpoint || harnessConfig.endpoint || payload.endpoint,
+    apiKey: defaultAiApiKey || harnessConfig.apiKey || (isProduction ? "" : payload.apiKey),
+    model: configuredAiModel || harnessConfig.model || payload.model || defaultAiModel,
+    temperature: harnessConfig.temperature
   };
   validateAiConfigValue(config);
   return config;
@@ -401,6 +670,13 @@ function appendAudit(event, req, details = {}) {
     })}\n`);
   } catch (error) {
     console.warn(`审计日志写入失败：${error.message}`);
+  }
+}
+
+async function appendAuditAsync(event, req, details = {}) {
+  appendAudit(event, req, details);
+  if (mysqlConfigured) {
+    await persistMysqlRuntimeState("audit", { items: readAuditList().slice().reverse() });
   }
 }
 
@@ -823,7 +1099,7 @@ function serveStatic(req, res, pathname) {
     return;
   }
   const requested = pathname === "/" ? "/index.html" : pathname;
-  const isRootStatic = requested === "/index.html" || requested === "/robots.txt" || requested === "/sitemap.xml" || requested === "/manifest.webmanifest";
+  const isRootStatic = requested === "/index.html" || requested === "/admin.html" || requested === "/login.html" || requested === "/robots.txt" || requested === "/sitemap.xml" || requested === "/manifest.webmanifest";
   const isAssetStatic = requested.startsWith("/assets/");
   const isAllowedStatic = isRootStatic || isAssetStatic;
   if (!isAllowedStatic || requested.startsWith("/data/")) {
@@ -871,25 +1147,25 @@ function serveStatic(req, res, pathname) {
 }
 
 async function callCompatibleAi(payload) {
-  const { endpoint, apiKey, model } = resolveAiConfig(payload);
+  const aiConfig = resolveAiConfig(payload);
   const { messages } = payload;
   validateAiMessages(messages);
-  if (!endpoint || !apiKey || !model) {
+  if (!aiConfig.endpoint || !aiConfig.apiKey || !aiConfig.model) {
     throw validationError("缺少 endpoint、apiKey、model 或 messages");
   }
   let response;
   try {
-    response = await fetch(endpoint, {
+    response = await fetch(aiConfig.endpoint, {
       method: "POST",
       signal: AbortSignal.timeout(AI_TIMEOUT_MS),
       headers: {
         "content-type": "application/json",
-        "authorization": `Bearer ${apiKey}`
+        "authorization": `Bearer ${aiConfig.apiKey}`
       },
       body: JSON.stringify({
-        model,
+        model: aiConfig.model,
         messages,
-        temperature: 0.3
+        temperature: aiConfig.temperature
       })
     });
   } catch {
@@ -917,6 +1193,7 @@ function parseRequestUrl(req) {
 export async function handleRequest(req, res) {
   assignRequestId(req, res);
   try {
+    await hydrateMysqlRuntimeState();
     const url = parseRequestUrl(req);
     if (url.pathname === "/api/health" && ["GET", "HEAD"].includes(req.method || "GET")) {
       const configStatus = getConfigStatus();
@@ -928,10 +1205,77 @@ export async function handleRequest(req, res) {
         storageReady: existsSync(workspacePath),
         seedReady: existsSync(seedWorkspacePath),
         adminRequired: Boolean(adminToken),
+        mysqlConfigured,
         ...configStatus,
         ...storageStatus
       };
       send(res, healthy ? 200 : 503, req.method === "HEAD" ? "" : payload);
+      return;
+    }
+
+    if (url.pathname === "/api/auth/login" && req.method === "POST") {
+      const body = await readJsonBody(req);
+      const username = String(body.username || "").trim();
+      const password = String(body.password || "");
+      const user = readUsers().find(item => item.username === username);
+      if (!user || !verifyPassword(password, user.passwordHash)) {
+        throw httpError("用户名或密码不正确", 401);
+      }
+      const session = {
+        id: randomBytes(32).toString("hex"),
+        userId: user.id,
+        createdAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + authSessionTtlMs).toISOString()
+      };
+      const sessions = readSessions();
+      sessions.push(session);
+      writeSessions(sessions);
+      await persistMysqlRuntimeState("sessions", { sessions });
+      await persistMysqlRuntimeState("users", { users: readUsers() });
+      await appendAuditAsync("auth.login", req, { username: user.username, role: user.role });
+      send(res, 200, { ok: true, user: publicUser(user) }, "application/json; charset=utf-8", {
+        "set-cookie": createCookie(authSessionCookie, session.id, { maxAge: Math.floor(authSessionTtlMs / 1000) })
+      });
+      return;
+    }
+
+    if (url.pathname === "/api/auth/me" && req.method === "GET") {
+      const user = requireSession(req);
+      send(res, 200, { ok: true, user: publicUser(user) });
+      return;
+    }
+
+    if (url.pathname === "/api/auth/logout" && req.method === "POST") {
+      const sid = parseCookies(req)[authSessionCookie];
+      if (sid) {
+        const sessions = readSessions().filter(item => item.id !== sid);
+        writeSessions(sessions);
+        await persistMysqlRuntimeState("sessions", { sessions });
+      }
+      send(res, 200, { ok: true }, "application/json; charset=utf-8", {
+        "set-cookie": createCookie(authSessionCookie, "", { maxAge: 0 })
+      });
+      return;
+    }
+
+    if (url.pathname === "/api/harness-config" && req.method === "GET") {
+      requireAdmin(req);
+      send(res, 200, { ok: true, config: sanitizeHarnessConfig(readHarnessConfigRaw()) });
+      return;
+    }
+
+    if (url.pathname === "/api/harness-config" && req.method === "PUT") {
+      requireHarnessAdmin(req);
+      enforceRateLimit(req, "harness.config", WRITE_LIMIT_PER_MINUTE);
+      const body = await readJsonBody(req);
+      const config = saveHarnessConfig(body);
+      await persistMysqlRuntimeState("harness-config", config);
+      await appendAuditAsync("harness.config.save", req, {
+        endpoint: config.endpoint,
+        model: config.model,
+        hasApiKey: Boolean(config.apiKey)
+      });
+      send(res, 200, { ok: true, config: sanitizeHarnessConfig(config) });
       return;
     }
 
@@ -981,7 +1325,8 @@ export async function handleRequest(req, res) {
       enforceRateLimit(req, "workspace.write", WRITE_LIMIT_PER_MINUTE);
       const body = await readJsonBody(req);
       saveWorkspace(body);
-      appendAudit("workspace.save", req, {
+      await persistMysqlRuntimeState("workspace", { ...body, savedAt: new Date().toISOString() });
+      await appendAuditAsync("workspace.save", req, {
         surnames: body.surnames ? Object.keys(body.surnames).length : 0,
         markdownCorpus: Array.isArray(body.markdownCorpus) ? body.markdownCorpus.length : 0,
         reviewState: Array.isArray(body.reviewState) ? body.reviewState.length : 0
@@ -996,10 +1341,11 @@ export async function handleRequest(req, res) {
       try {
         backupWorkspace();
         if (existsSync(workspacePath)) rmSync(workspacePath);
+        await persistMysqlRuntimeState("workspace", null);
       } catch {
         throw httpError("工作区文件无法清空，请检查运行数据目录", 503);
       }
-      appendAudit("workspace.delete", req);
+      await appendAuditAsync("workspace.delete", req);
       send(res, 200, { ok: true });
       return;
     }
@@ -1014,7 +1360,8 @@ export async function handleRequest(req, res) {
       enforceRateLimit(req, "feedback.create", WRITE_LIMIT_PER_MINUTE);
       const body = await readJsonBody(req);
       const item = saveFeedback(body);
-      appendAudit("feedback.create", req, {
+      await persistMysqlRuntimeState("feedback", { items: readFeedbackList().slice().reverse() });
+      await appendAuditAsync("feedback.create", req, {
         id: item.id,
         surname: item.surname,
         contentLength: item.content.length
@@ -1034,7 +1381,8 @@ export async function handleRequest(req, res) {
       enforceRateLimit(req, "feedback.update", WRITE_LIMIT_PER_MINUTE);
       const body = await readJsonBody(req);
       const item = updateFeedbackStatus(body);
-      appendAudit("feedback.update", req, {
+      await persistMysqlRuntimeState("feedback", { items: readFeedbackList().slice().reverse() });
+      await appendAuditAsync("feedback.update", req, {
         id: item.id,
         status: item.status
       });
@@ -1048,7 +1396,7 @@ export async function handleRequest(req, res) {
       const body = await readJsonBody(req);
       const aiConfig = resolveAiConfig(body);
       validateAiMessages(body.messages);
-      appendAudit("ai.draft", req, {
+      await appendAuditAsync("ai.draft", req, {
         model: aiConfig.model,
         messages: Array.isArray(body.messages) ? body.messages.length : 0
       });

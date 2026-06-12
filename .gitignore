@@ -3,5 +3,8 @@ node_modules/
 data/workspace.json
 data/audit.log
 data/feedback.jsonl
+data/users.json
+data/sessions.json
+data/harness-config.json
 data/backups/
 *.log

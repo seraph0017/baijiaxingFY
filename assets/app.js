@@ -9,6 +9,10 @@ let workspaceSaveVersion = 0;
   const STORAGE_KEY = "baijiaxing-suyuanlu-workspace-v1";
 
   const byId = (id) => document.getElementById(id);
+  const on = (id, event, handler) => {
+    const element = byId(id);
+    if (element) element.addEventListener(event, handler);
+  };
   const escapeHtml = (value) => String(value ?? "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
@@ -614,12 +618,13 @@ function hydrateWorkspace() {
     persistWorkspace(`${surname}姓新增资料已保存。`);
   }
 
-  async function callAiModel({ endpoint, apiKey, model, surname, contextItems }) {
+  async function callAiModel({ surname, contextItems }) {
     const data = surnames[surname] || surnames["陈"];
+    const systemPrompt = byId("harnessSystemPrompt")?.value.trim() || "你是中华姓氏文化资料整理助手。只输出科普初稿，不做定论。必须区分多源流、民间传说、待核来源。";
     const messages = [
     {
       role: "system",
-      content: "你是中华姓氏文化资料整理助手。只输出科普初稿，不做定论。必须区分多源流、民间传说、待核来源。"
+      content: systemPrompt
     },
     {
       role: "user",
@@ -635,9 +640,6 @@ function hydrateWorkspace() {
     method: "POST",
     headers: getAdminHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({
-      endpoint,
-      apiKey,
-      model,
       messages
     })
     });
@@ -648,7 +650,93 @@ function hydrateWorkspace() {
     return payload.payload?.choices?.[0]?.message?.content || "AI 已返回，但未解析到正文。";
   }
 
+  async function loginUser(event) {
+    event.preventDefault();
+    const status = byId("loginStatus");
+    if (status) status.textContent = "正在登录...";
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: byId("loginUsername").value.trim(),
+          password: byId("loginPassword").value
+        })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || `登录失败 ${response.status}`);
+      if (status) status.textContent = "登录成功，正在进入后台。";
+      location.href = "/admin.html";
+    } catch (error) {
+      if (status) status.textContent = `登录失败：${error.message}`;
+    }
+  }
+
+  async function requireAdminSession() {
+    const response = await fetch("/api/auth/me");
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      location.href = `/login.html?next=${encodeURIComponent(location.pathname)}`;
+      throw new Error(payload.error || "请先登录");
+    }
+    const currentUser = byId("currentUser");
+    if (currentUser) currentUser.textContent = `${payload.user.displayName || payload.user.username} · ${payload.user.role}`;
+    return payload.user;
+  }
+
+  async function logoutUser() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    location.href = "/login.html";
+  }
+
+  async function loadHarnessConfig() {
+    const status = byId("harnessConfigStatus");
+    try {
+      const response = await fetch("/api/harness-config", { headers: getAdminHeaders() });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || `读取失败 ${response.status}`);
+      const config = payload.config || {};
+      if (byId("harnessEndpoint")) byId("harnessEndpoint").value = config.endpoint || "";
+      if (byId("harnessModel")) byId("harnessModel").value = config.model || "";
+      if (byId("harnessSystemPrompt")) byId("harnessSystemPrompt").value = config.systemPrompt || "";
+      if (byId("harnessTemperature")) byId("harnessTemperature").value = config.temperature ?? 0.3;
+      if (byId("harnessRetrievalQuery")) byId("harnessRetrievalQuery").value = config.retrievalQuery || "";
+      if (byId("retrievalQuery")) byId("retrievalQuery").value = config.retrievalQuery || byId("retrievalQuery").value;
+      if (status) status.textContent = config.hasApiKey ? "Harness 配置已加载，API Key 已保存。留空不会覆盖。" : "Harness 配置已加载，尚未保存 API Key。";
+    } catch (error) {
+      if (status) status.textContent = `Harness 配置读取失败：${error.message}`;
+    }
+  }
+
+  async function saveHarnessConfig() {
+    const status = byId("harnessConfigStatus");
+    if (status) status.textContent = "正在保存 Harness 配置...";
+    try {
+      const response = await fetch("/api/harness-config", {
+        method: "PUT",
+        headers: getAdminHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({
+          endpoint: byId("harnessEndpoint").value.trim(),
+          model: byId("harnessModel").value.trim(),
+          apiKey: byId("harnessApiKey").value.trim(),
+          systemPrompt: byId("harnessSystemPrompt").value.trim(),
+          temperature: Number(byId("harnessTemperature").value || 0.3),
+          retrievalQuery: byId("harnessRetrievalQuery").value.trim(),
+          sourceTypes: getSelectedSourceTypes()
+        })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || `保存失败 ${response.status}`);
+      byId("harnessApiKey").value = "";
+      if (byId("retrievalQuery")) byId("retrievalQuery").value = payload.config?.retrievalQuery || byId("harnessRetrievalQuery").value.trim();
+      if (status) status.textContent = "Harness 配置已保存。";
+    } catch (error) {
+      if (status) status.textContent = `Harness 配置保存失败：${error.message}`;
+    }
+  }
+
   function renderRepositoryStats() {
+    if (!byId("repositoryStats")) return;
     const approved = reviewState.filter(item => item.status === "已发布").length;
     const pending = reviewState.length - approved;
     byId("repositoryStats").innerHTML = [
@@ -662,6 +750,7 @@ function hydrateWorkspace() {
   }
 
   function renderReviewQueue() {
+    if (!byId("reviewQueue")) return;
     byId("reviewQueue").innerHTML = reviewState.map(item => `
     <div class="review-item" data-review-row="${escapeHtml(item.title)}">
       <span class="tag">${escapeHtml(item.status)}</span>
@@ -952,8 +1041,8 @@ function hydrateWorkspace() {
       <span class="tag">${escapeHtml(item.type)}</span>
     </article>`).join("");
     byId("actionStatus").textContent = "";
-    byId("harnessResult").textContent = "";
-    byId("aiDraft").textContent = "等待生成。默认先从本页 Markdown 资料库召回上下文。";
+    if (byId("harnessResult")) byId("harnessResult").textContent = "";
+    if (byId("aiDraft")) byId("aiDraft").textContent = "等待生成。默认先从本页 Markdown 资料库召回上下文。";
     syncProfileEditor();
   }
 
@@ -972,6 +1061,7 @@ function hydrateWorkspace() {
   function runDemoScenario() {
     const params = new URLSearchParams(location.search);
     if (params.get("demo") !== "pending") return;
+    if (!byId("sourceTitle") || !byId("harness")) return;
     renderSurname("张");
     byId("sourceTitle").value = "张姓源流补充.md";
     byId("sourceType").value = "local";
@@ -993,6 +1083,7 @@ function hydrateWorkspace() {
   }
 
   function setAppView(name) {
+    if (!byId("opsView")) return;
     const next = name === "ops" ? "ops" : "public";
     byId("publicView").classList.toggle("hidden", next !== "public");
     byId("opsView").classList.toggle("hidden", next !== "ops");
@@ -1032,7 +1123,7 @@ function hydrateWorkspace() {
     }
   }
 
-  async function initializeApp() {
+  async function initializeWorkspace() {
     let serverReady = await hydrateWorkspaceFromServer();
     if (!serverReady) {
     try {
@@ -1042,6 +1133,11 @@ function hydrateWorkspace() {
       hydrateWorkspace();
     }
     }
+    return serverReady;
+  }
+
+  async function initializeApp() {
+    const serverReady = await initializeWorkspace();
     renderHotList();
     renderRepositoryStats();
     renderReviewQueue();
@@ -1052,36 +1148,44 @@ function hydrateWorkspace() {
     runDemoScenario();
   }
 
-  initializeApp();
+  async function initializeAdminApp() {
+    await requireAdminSession();
+    const serverReady = await initializeWorkspace();
+    renderHotList();
+    renderRepositoryStats();
+    renderReviewQueue();
+    renderSurname(surnames["陈"] ? "陈" : Object.keys(surnames)[0]);
+    renderFeedbackQueue();
+    renderAuditTrail();
+    if (byId("dataReady")) byId("dataReady").textContent = serverReady ? "JSON 持久化已连接" : "本地模式可用";
+    await loadHarnessConfig();
+  }
 
-  document.querySelectorAll("[data-view]").forEach(button => {
-    button.addEventListener("click", () => setAppView(button.dataset.view));
-  });
-
-  byId("searchBtn").addEventListener("click", () => {
+  function bindPublicEvents() {
+  on("searchBtn", "click", () => {
     const value = resolveSurnameQuery(byId("surnameInput").value);
     renderSurname(value);
     document.querySelector("#profile").scrollIntoView({ behavior: "smooth" });
   });
-  byId("surnameInput").addEventListener("keydown", event => {
+  on("surnameInput", "keydown", event => {
     if (event.key === "Enter") byId("searchBtn").click();
   });
-  byId("hotList").addEventListener("click", event => {
+  on("hotList", "click", event => {
     const target = event.target.closest("[data-surname]");
     if (!target) return;
     renderSurname(target.dataset.surname);
     document.querySelector("#profile").scrollIntoView({ behavior: "smooth" });
   });
-  byId("moduleTabs").addEventListener("click", event => {
+  on("moduleTabs", "click", event => {
     const target = event.target.closest("[data-tab]");
     if (!target) return;
     setTab(target.dataset.tab);
   });
-  byId("favoriteBtn").addEventListener("click", () => {
+  on("favoriteBtn", "click", () => {
     const name = getCurrentSurname();
     byId("actionStatus").textContent = `已收藏${name}姓档案样例。`;
   });
-  byId("shareBtn").addEventListener("click", async () => {
+  on("shareBtn", "click", async () => {
     const name = getCurrentSurname();
     const url = `${location.href.split("#")[0]}#profile`;
     try {
@@ -1091,22 +1195,28 @@ function hydrateWorkspace() {
     byId("actionStatus").textContent = `${name}姓档案链接：${url}`;
     }
   });
-  byId("exportBtn").addEventListener("click", () => {
+  on("exportBtn", "click", () => {
     byId("actionStatus").textContent = "正在打开浏览器打印面板，可选择另存为 PDF。";
     window.print();
   });
-  byId("harnessBtn").addEventListener("click", async () => {
+  on("feedbackBtn", "click", submitFeedback);
+  }
+
+  function bindAdminEvents() {
+  document.querySelectorAll("[data-view]").forEach(button => {
+    button.addEventListener("click", () => setAppView(button.dataset.view));
+  });
+  on("logoutBtn", "click", logoutUser);
+  on("saveHarnessConfigBtn", "click", saveHarnessConfig);
+  on("harnessBtn", "click", async () => {
     const name = getCurrentSurname();
-    const endpoint = byId("apiEndpoint").value.trim();
-    const apiKey = byId("apiKey").value.trim();
-    const model = byId("modelName").value.trim() || "gpt-4.1-mini";
     const contextItems = retrieveMarkdownContext(name, byId("retrievalQuery").value, getSelectedSourceTypes());
     byId("harnessResult").textContent = `已召回 ${contextItems.length} 条 Markdown 上下文，正在生成${name}姓初稿。`;
     byId("aiDraft").textContent = "生成中...";
     try {
-    const draft = await callAiModel({ endpoint, apiKey, model, surname: name, contextItems });
+    const draft = await callAiModel({ surname: name, contextItems });
     byId("aiDraft").textContent = draft;
-    byId("harnessResult").textContent = `已通过服务端 AI 代理调用模型 ${model} 生成${name}姓 AI 初稿，进入待审核队列。`;
+    byId("harnessResult").textContent = `已通过服务端 AI 代理生成${name}姓 AI 初稿，进入待审核队列。`;
     if (!reviewState.some(item => item.surname === name && item.title.includes("AI Harness"))) {
       reviewState.unshift(createReviewItem(name, `${name}姓 AI Harness 初稿`, "AI 初稿", "文史编辑"));
       renderRepositoryStats();
@@ -1118,18 +1228,18 @@ function hydrateWorkspace() {
     byId("harnessResult").textContent = `AI 接口调用失败，已回退到离线初稿：${error.message}`;
     }
   });
-  byId("addSourceBtn").addEventListener("click", addCorpusSource);
-  byId("batchSurnameBtn").addEventListener("click", importSurnameBatch);
-  byId("saveProfileBtn").addEventListener("click", saveProfileEdits);
-  byId("exportDataBtn").addEventListener("click", exportWorkspace);
-  byId("copyDataBtn").addEventListener("click", copyWorkspace);
-  byId("importDataBtn").addEventListener("click", importWorkspace);
-  byId("resetDataBtn").addEventListener("click", resetWorkspace);
-  byId("refreshFeedbackBtn").addEventListener("click", loadFeedbackQueue);
-  byId("refreshAuditBtn").addEventListener("click", loadAuditTrail);
-  byId("verifyAdminBtn").addEventListener("click", verifyAdminAccess);
-  byId("clearAdminBtn").addEventListener("click", clearAdminAccess);
-  byId("reviewQueue").addEventListener("click", event => {
+  on("addSourceBtn", "click", addCorpusSource);
+  on("batchSurnameBtn", "click", importSurnameBatch);
+  on("saveProfileBtn", "click", saveProfileEdits);
+  on("exportDataBtn", "click", exportWorkspace);
+  on("copyDataBtn", "click", copyWorkspace);
+  on("importDataBtn", "click", importWorkspace);
+  on("resetDataBtn", "click", resetWorkspace);
+  on("refreshFeedbackBtn", "click", loadFeedbackQueue);
+  on("refreshAuditBtn", "click", loadAuditTrail);
+  on("verifyAdminBtn", "click", verifyAdminAccess);
+  on("clearAdminBtn", "click", clearAdminAccess);
+  on("reviewQueue", "click", event => {
     const actionTarget = event.target.closest("[data-action]");
     if (actionTarget) {
     const nextStatus = actionTarget.dataset.action === "approve" ? "已发布" : "已驳回";
@@ -1139,11 +1249,21 @@ function hydrateWorkspace() {
     const target = event.target.closest("[data-review]");
     if (!target) return;
     renderSurname(target.dataset.review);
-    document.querySelector("#profile").scrollIntoView({ behavior: "smooth" });
+    document.querySelector("#profileEditor").scrollIntoView({ behavior: "smooth" });
   });
-  byId("feedbackQueue").addEventListener("click", event => {
+  on("feedbackQueue", "click", event => {
     const target = event.target.closest("[data-feedback-action]");
     if (!target) return;
     updateFeedbackStatus(target.dataset.feedbackId, target.dataset.feedbackAction);
   });
-  byId("feedbackBtn").addEventListener("click", submitFeedback);
+  }
+
+  if (byId("loginForm")) {
+    on("loginForm", "submit", loginUser);
+  } else if (byId("adminApp")) {
+    bindAdminEvents();
+    initializeAdminApp();
+  } else {
+    bindPublicEvents();
+    initializeApp();
+  }

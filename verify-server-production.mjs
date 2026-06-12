@@ -109,7 +109,7 @@ const healthMissingAi = await callRoute(handleMissingAi, {
   url: "/api/health",
   headers: { "x-admin-token": "prod-admin-token" }
 });
-expectOk("生产缺 AI 配置健康检查失败", healthMissingAi.status === 503 && healthMissingAi.json?.ok === false && healthMissingAi.json?.configReady === false);
+expectOk("生产缺 AI 环境配置但允许后台 Harness 配置", healthMissingAi.status === 200 && healthMissingAi.json?.ok === true && healthMissingAi.json?.configReady === true);
 expectOk("生产缺 AI 配置健康检查不泄漏配置名", !/ADMIN_TOKEN|AI_ENDPOINT|AI_API_KEY/.test(healthMissingAi.text));
 
 const aiDraftWithPayloadKey = await callRoute(handleMissingAi, {
@@ -123,24 +123,32 @@ const aiDraftWithPayloadKey = await callRoute(handleMissingAi, {
     messages: [{ role: "user", content: "test" }]
   })
 });
-expectOk("生产缺 AI 配置拒绝前端 Key 兜底", aiDraftWithPayloadKey.status === 503 && /AI_ENDPOINT/.test(aiDraftWithPayloadKey.json?.error || ""));
+expectOk("生产缺后台 Harness Key 时拒绝 AI 调用", aiDraftWithPayloadKey.status === 400 && /apiKey/.test(aiDraftWithPayloadKey.json?.error || ""));
 
 const runtimeDirInvalidAiEndpoint = join(tmpdir(), `baijiaxing-prod-invalid-ai-endpoint-${Date.now()}`);
 process.env.DATA_DIR = runtimeDirInvalidAiEndpoint;
 process.env.ADMIN_TOKEN = "prod-admin-token";
-process.env.AI_ENDPOINT = "ftp://example.invalid/v1/chat/completions";
-process.env.AI_API_KEY = "prod-ai-key";
 
 const { handleRequest: handleInvalidAiEndpoint } = await import(`./server.js?prod-invalid-ai-endpoint=${Date.now()}`);
 
-const healthInvalidAiEndpoint = await callRoute(handleInvalidAiEndpoint, {
-  url: "/api/health",
-  headers: { "x-admin-token": "prod-admin-token" }
+const healthInvalidAiEndpoint = await callRoute(handleInvalidAiEndpoint, { url: "/api/health" });
+expectOk("生产 AI Endpoint 格式错误健康检查失败", healthInvalidAiEndpoint.status === 200
+  && healthInvalidAiEndpoint.json?.ok === true
+  && healthInvalidAiEndpoint.json?.configReady === true);
+const invalidHarnessEndpoint = await callRoute(handleInvalidAiEndpoint, {
+  method: "PUT",
+  url: "/api/harness-config",
+  headers: { "content-type": "application/json", "x-admin-token": "prod-admin-token" },
+  body: JSON.stringify({
+    endpoint: "ftp://example.invalid/v1/chat/completions",
+    apiKey: "prod-ai-key",
+    model: "prod-model",
+    systemPrompt: "只整理可信资料。",
+    temperature: 0.3,
+    retrievalQuery: "源流"
+  })
 });
-expectOk("生产 AI Endpoint 格式错误健康检查失败", healthInvalidAiEndpoint.status === 503
-  && healthInvalidAiEndpoint.json?.ok === false
-  && healthInvalidAiEndpoint.json?.configReady === false);
-expectOk("生产 AI Endpoint 格式错误健康检查不泄漏配置名", !/ADMIN_TOKEN|AI_ENDPOINT|AI_API_KEY|ftp:/.test(healthInvalidAiEndpoint.text));
+expectOk("生产 AI Endpoint 格式错误健康检查不泄漏配置名", invalidHarnessEndpoint.status === 400 && !/ADMIN_TOKEN|AI_ENDPOINT|AI_API_KEY/.test(invalidHarnessEndpoint.text));
 
 const blockedRuntimePath = join(tmpdir(), `baijiaxing-prod-blocked-${Date.now()}`);
 writeFileSync(blockedRuntimePath, "not-a-directory");

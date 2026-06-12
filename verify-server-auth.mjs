@@ -6,6 +6,8 @@ import { Readable, Writable } from "node:stream";
 const runtimeDir = join(tmpdir(), `baijiaxing-auth-${Date.now()}`);
 process.env.DATA_DIR = runtimeDir;
 process.env.ADMIN_TOKEN = "test-admin-token";
+process.env.AUTH_BOOTSTRAP_USER = "admin";
+process.env.AUTH_BOOTSTRAP_PASSWORD = "admin-pass-123";
 process.env.WRITE_LIMIT_PER_MINUTE = "1";
 process.env.AI_LIMIT_PER_MINUTE = "1";
 
@@ -91,6 +93,61 @@ const protectedAi = await callRoute({
   body: JSON.stringify({ messages: [] })
 });
 expectOk("AI 代理拒绝无令牌", protectedAi.status === 401);
+
+const anonymousMe = await callRoute({ url: "/api/auth/me" });
+expectOk("未登录 me 返回 401", anonymousMe.status === 401);
+
+const badLogin = await callRoute({
+  method: "POST",
+  url: "/api/auth/login",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ username: "admin", password: "wrong-password" })
+});
+expectOk("错误密码拒绝登录", badLogin.status === 401);
+
+const login = await callRoute({
+  method: "POST",
+  url: "/api/auth/login",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ username: "admin", password: "admin-pass-123" })
+});
+const sessionCookie = String(login.headers["set-cookie"] || "").split(";")[0];
+expectOk("管理员账号可登录", login.status === 200 && login.json?.user?.role === "admin" && /^bjx_session=/.test(sessionCookie));
+
+const loggedInMe = await callRoute({
+  url: "/api/auth/me",
+  headers: { cookie: sessionCookie }
+});
+expectOk("登录后 me 返回当前用户", loggedInMe.status === 200 && loggedInMe.json?.user?.username === "admin");
+
+const harnessConfig = await callRoute({
+  method: "PUT",
+  url: "/api/harness-config",
+  headers: { "content-type": "application/json", cookie: sessionCookie },
+  body: JSON.stringify({
+    endpoint: "https://api.example.com/v1/chat/completions",
+    model: "gpt-4.1-mini",
+    apiKey: "secret-key",
+    systemPrompt: "只整理可信姓氏资料。",
+    temperature: 0.2,
+    retrievalQuery: "源流 迁徙 名人",
+    sourceTypes: ["classic", "local"]
+  })
+});
+expectOk("管理员可保存 Harness 配置", harnessConfig.status === 200 && harnessConfig.json?.config?.endpoint.includes("api.example.com"));
+
+const readHarnessConfig = await callRoute({
+  url: "/api/harness-config",
+  headers: { cookie: sessionCookie }
+});
+expectOk("Harness 配置可读取且不回显 Key", readHarnessConfig.status === 200 && readHarnessConfig.json?.config?.model === "gpt-4.1-mini" && readHarnessConfig.json?.config?.hasApiKey === true && !JSON.stringify(readHarnessConfig.json).includes("secret-key"));
+
+const logout = await callRoute({
+  method: "POST",
+  url: "/api/auth/logout",
+  headers: { cookie: sessionCookie }
+});
+expectOk("用户可退出登录", logout.status === 200 && /Max-Age=0/.test(String(logout.headers["set-cookie"] || "")));
 
 const publicFeedback = await callRoute({
   method: "POST",

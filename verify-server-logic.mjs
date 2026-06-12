@@ -324,14 +324,16 @@ const invalidAiMessages = await callRoute({
 await expectOk("AI 消息结构错误返回 400", invalidAiMessages.status === 400);
 
 const invalidAiEndpointProtocol = await callRoute({
-  method: "POST",
-  url: "/api/ai-draft",
+  method: "PUT",
+  url: "/api/harness-config",
   headers: { "content-type": "application/json" },
   body: JSON.stringify({
     endpoint: "ftp://example.invalid/v1/chat/completions",
     apiKey: "test-key",
     model: "test-model",
-    messages: [{ role: "user", content: "test" }]
+    systemPrompt: "只整理可信资料。",
+    temperature: 0.3,
+    retrievalQuery: "源流"
   })
 });
 await expectOk("AI Endpoint 协议错误返回 400", invalidAiEndpointProtocol.status === 400
