@@ -745,7 +745,8 @@ function hydrateWorkspace() {
     }));
   }
 
-  function applyAiDraftToProfile(surname, draft) {
+  function applyAiDraftToProfile(surname, draft, options = {}) {
+    const { persist = true, rerender = true } = options;
     const data = surnames[surname] || createPendingSurname(surname, { persist: false });
     const traditional = extractAiProfileField(draft, ["繁体", "繁體"]) || data.traditional || data.char;
     const pinyin = extractAiProfileField(draft, ["拼音", "读音", "讀音"]) || data.pinyin || data.info?.["拼音"];
@@ -789,9 +790,13 @@ function hydrateWorkspace() {
     if (parsedFigures.length) data.figures = parsedFigures;
     if (parsedSources.length) data.sources = parsedSources;
     if (parsedRisks.length) data.reviewRisks = parsedRisks;
-    renderSurname(surname);
-    syncProfileEditor();
-    persistWorkspace(`${surname}姓 AI 初稿已回填到校订字段，源流分支、迁徙路线、参考来源、审核风险已同步。`);
+    if (rerender) {
+      renderSurname(surname);
+      syncProfileEditor();
+    }
+    if (persist) {
+      persistWorkspace(`${surname}姓 AI 初稿已回填到校订字段，源流分支、迁徙路线、参考来源、审核风险已同步。`);
+    }
     if (byId("profileEditStatus")) byId("profileEditStatus").textContent = `${surname}姓 AI 初稿已回填到校订字段，源流分支、迁徙路线、参考来源、审核风险已同步，请人工确认后保存并送审。`;
   }
 
@@ -1164,16 +1169,90 @@ function hydrateWorkspace() {
     persistWorkspace(`审核状态已更新为${item.status}。`);
   }
 
+  const migrationRegionFeatures = [
+    { name: "关中", aliases: ["陕西", "关中", "长安", "西安", "秦"], coordinates: [[92, 20], [111, 18], [114, 33], [100, 39], [88, 31]] },
+    { name: "中原", aliases: ["河南", "洛阳", "开封", "淮阳", "陈国", "徐国", "中原"], coordinates: [[114, 36], [131, 35], [136, 49], [121, 55], [110, 47]] },
+    { name: "齐鲁", aliases: ["山东", "齐鲁", "东海", "琅琊", "济南"], coordinates: [[132, 37], [151, 35], [155, 50], [139, 56], [130, 49]] },
+    { name: "江淮", aliases: ["江苏", "安徽", "江淮", "金陵", "南京", "扬州"], coordinates: [[126, 56], [149, 55], [153, 72], [132, 75], [120, 65]] },
+    { name: "江南", aliases: ["浙江", "江西", "江南", "吴越", "杭州", "苏州"], coordinates: [[121, 73], [151, 72], [156, 91], [133, 100], [114, 88]] },
+    { name: "荆楚", aliases: ["湖北", "湖南", "荆楚", "楚地", "武昌", "长沙"], coordinates: [[96, 58], [121, 57], [124, 86], [101, 93], [88, 75]] },
+    { name: "巴蜀", aliases: ["四川", "重庆", "巴蜀", "成都", "蜀"], coordinates: [[64, 51], [94, 54], [91, 82], [66, 86], [52, 67]] },
+    { name: "岭南", aliases: ["广东", "广西", "福建", "岭南", "闽粤", "广州", "福州"], coordinates: [[105, 91], [160, 91], [161, 115], [112, 119], [93, 105]] },
+    { name: "燕赵", aliases: ["河北", "北京", "天津", "燕赵", "幽州"], coordinates: [[112, 16], [136, 14], [143, 33], [122, 38], [110, 29]] },
+    { name: "辽西", aliases: ["辽宁", "辽西", "昌黎", "鲜卑", "慕容"], coordinates: [[139, 14], [166, 12], [174, 32], [151, 38], [141, 28]] }
+  ];
+
+  function migrationRegionCollection() {
+    return {
+      type: "FeatureCollection",
+      features: migrationRegionFeatures.map(feature => ({
+        type: "Feature",
+        properties: { name: feature.name, aliases: feature.aliases },
+        geometry: {
+          type: "Polygon",
+          coordinates: [feature.coordinates]
+        }
+      }))
+    };
+  }
+
+  function resolveMigrationRegions(routeItems) {
+    const text = (routeItems || []).map(item => `${item.place} ${item.reason} ${item.phase}`).join(" ");
+    const matched = migrationRegionFeatures
+      .filter(region => region.aliases.some(alias => text.includes(alias)))
+      .map(region => region.name);
+    return matched.length ? matched : ["中原"];
+  }
+
+  function renderInteractiveMigrationMap(container, routeItems) {
+    if (!window.d3 || !container) return;
+    const width = container.clientWidth || 900;
+    const height = container.clientHeight || 420;
+    const activeRegions = new Set(resolveMigrationRegions(routeItems));
+    const geoJson = migrationRegionCollection();
+    const projection = d3.geoIdentity().reflectY(false).fitSize([width, height], geoJson);
+    const path = d3.geoPath(projection);
+    const svg = d3.select(container)
+      .html("")
+      .append("svg")
+      .attr("viewBox", `0 0 ${width} ${height}`)
+      .attr("role", "img")
+      .attr("aria-label", "迁徙区域高亮地图");
+
+    svg.selectAll("path")
+      .data(geoJson.features)
+      .join("path")
+      .attr("class", feature => `migration-region ${activeRegions.has(feature.properties.name) ? "active" : ""}`)
+      .attr("data-region", feature => feature.properties.name)
+      .attr("d", path)
+      .on("mouseenter", (_, feature) => {
+        container.closest(".migration-map")?.querySelectorAll("[data-region]").forEach(region => region.classList.remove("focused"));
+        container.closest(".migration-map")?.querySelector(`[data-region="${feature.properties.name}"]`)?.classList.add("focused");
+      })
+      .on("mouseleave", () => {
+        container.closest(".migration-map")?.querySelectorAll("[data-region]").forEach(region => region.classList.remove("focused"));
+      });
+
+    svg.selectAll("text")
+      .data(geoJson.features)
+      .join("text")
+      .attr("class", "migration-label")
+      .attr("x", feature => path.centroid(feature)[0])
+      .attr("y", feature => path.centroid(feature)[1])
+      .text(feature => feature.properties.name);
+  }
+
   function renderMigrationMap(routeItems) {
     const nodes = routeItems || [];
     const points = nodes.map(item => `${item.x},${item.y}`).join(" ");
     return `
     <div class="migration-map" aria-label="迁徙路线可视化">
-      <svg viewBox="0 0 100 80" preserveAspectRatio="none" aria-hidden="true">
-      <path d="${points ? `M ${points.replaceAll(" ", " L ")}` : ""}"></path>
+      <div class="migration-geo-map" data-migration-geo-map></div>
+      <svg class="migration-map-fallback" viewBox="0 0 100 80" preserveAspectRatio="none" aria-hidden="true">
+      <path class="route-line" d="${points ? `M ${points.replaceAll(" ", " L ")}` : ""}"></path>
       </svg>
       ${nodes.map((item, index) => `
-      <article class="route-node" data-route-node="${index + 1}" data-route-x="${escapeHtml(item.x)}" data-route-y="${escapeHtml(item.y)}">
+      <article class="route-node" data-route-node="${index + 1}" data-route-x="${escapeHtml(item.x)}" data-route-y="${escapeHtml(item.y)}" data-route-place="${escapeHtml(item.place)}">
         <strong>${escapeHtml(item.place)}</strong>
         <span>${escapeHtml(item.phase)}</span>
         <p>${escapeHtml(item.reason)}</p>
@@ -1189,6 +1268,12 @@ function hydrateWorkspace() {
     return `${axis}-${rounded}`;
   }
 
+  function initializeMigrationMap(routeItems) {
+    document.querySelectorAll("[data-migration-geo-map]").forEach(container => {
+      renderInteractiveMigrationMap(container, routeItems);
+    });
+  }
+
   function positionRouteNodes() {
     document.querySelectorAll("[data-route-node]").forEach(node => {
       Array.from(node.classList).forEach(className => {
@@ -1202,14 +1287,17 @@ function hydrateWorkspace() {
   }
 
   function resolveProfileReviewStatus(data, sourceCount) {
+    if (data.transient) return "AI 临时初稿";
     if (reviewState.some(item => item.surname === data.char && item.status === "已发布")) return "已审核发布";
     if ((data.tags || []).some(tag => String(tag).includes("待收录"))) return "待收录";
     if (sourceCount > 0) return "来源待核";
     return "待补来源";
   }
 
-  function renderSurname(name) {
-    const data = surnames[name] || createPendingSurname(name);
+  function renderSurname(name, options = {}) {
+    const { transientData = null, allowCreate = true } = options;
+    const data = transientData || surnames[name] || (allowCreate ? createPendingSurname(name) : null);
+    if (!data) return;
     const sourceCount = Array.isArray(data.sources) ? data.sources.length : 0;
     const reviewStatus = resolveProfileReviewStatus(data, sourceCount);
     setCurrentSurname(data.char);
@@ -1243,6 +1331,7 @@ function hydrateWorkspace() {
     byId("tab-migration").innerHTML = `${renderMigrationMap(data.route)}<div class="timeline">${data.migrations.map(([phase, text]) => `
     <div class="phase"><strong>${escapeHtml(phase)}</strong><span>${escapeHtml(text)}</span></div>`).join("")}</div>`;
     positionRouteNodes();
+    initializeMigrationMap(data.route);
     byId("tab-branches").innerHTML = `<div class="grid-3">${data.branches.map(item => `
     <article class="card"><p>${escapeHtml(item)}</p></article>`).join("")}</div>`;
     byId("tab-visuals").innerHTML = `
@@ -1353,6 +1442,78 @@ function hydrateWorkspace() {
     }
   }
 
+  function createTransientSurnameFromDraft(surname, draft) {
+    const name = normalizeSurnameInput(surname, "新");
+    const original = surnames[name];
+    const reviewSnapshot = reviewState.slice();
+    const data = normalizeClientSurnameProfile({
+      ...createPendingSurname(name, { persist: false }),
+      char: name,
+      summary: `${name}姓 AI 临时初稿正在展示，尚未经过管理员审核，不会写入正式资料库。`,
+      tags: ["AI 临时初稿", "待人工审核", "未持久化"]
+    }, name);
+    data.transient = true;
+    surnames[name] = data;
+    applyAiDraftToProfile(name, draft, { persist: false, rerender: false });
+    const transient = JSON.parse(JSON.stringify(surnames[name]));
+    if (original) surnames[name] = original;
+    else delete surnames[name];
+    reviewState.splice(0, reviewState.length, ...reviewSnapshot);
+    transient.transient = true;
+    transient.tags = ["AI 临时初稿", "待人工审核", "未持久化"];
+    return transient;
+  }
+
+  function createTransientPendingSurname(surname) {
+    const name = normalizeSurnameInput(surname, "新");
+    const original = surnames[name];
+    const reviewSnapshot = reviewState.slice();
+    const transient = JSON.parse(JSON.stringify(createPendingSurname(name, { persist: false })));
+    if (original) surnames[name] = original;
+    else delete surnames[name];
+    reviewState.splice(0, reviewState.length, ...reviewSnapshot);
+    transient.transient = true;
+    transient.tags = ["AI 临时初稿", "待人工审核", "未持久化"];
+    return transient;
+  }
+
+  async function generatePublicAiPreview(name) {
+    const response = await fetch("/api/public-ai-draft", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ surname: name })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || `AI 预览返回 ${response.status}`);
+    return createTransientSurnameFromDraft(payload.surname || name, payload.draft || "");
+  }
+
+  async function renderPublicSurnameSearch() {
+    const raw = byId("surnameInput").value;
+    const value = resolveSurnameQuery(raw);
+    const normalized = normalizeSurnameInput(raw, "");
+    if (surnames[value]) {
+      renderSurname(value);
+      document.querySelector("#profile").scrollIntoView({ behavior: "smooth" });
+      return;
+    }
+    if (!normalized || isLatinLikeQuery(raw)) {
+      renderSurname(value);
+      document.querySelector("#profile").scrollIntoView({ behavior: "smooth" });
+      return;
+    }
+    byId("actionStatus").textContent = `正在生成${normalized}姓 AI 临时初稿，不会写入正式资料库。`;
+    try {
+      const transientProfile = await generatePublicAiPreview(normalized);
+      renderSurname(transientProfile.char, { transientData: transientProfile, allowCreate: false });
+      byId("actionStatus").textContent = `${transientProfile.char}姓 AI 临时初稿已生成，待管理员审核后才会持久化。`;
+    } catch (error) {
+      renderSurname(normalized, { transientData: createTransientPendingSurname(normalized), allowCreate: false });
+      byId("actionStatus").textContent = `AI 临时初稿生成失败：${error.message}`;
+    }
+    document.querySelector("#profile").scrollIntoView({ behavior: "smooth" });
+  }
+
   async function generateHarnessDraft() {
     const name = byId("activeSurnameInput") ? switchAdminSurname() : getCurrentSurname();
     if (!name) {
@@ -1423,11 +1584,7 @@ function hydrateWorkspace() {
   }
 
   function bindPublicEvents() {
-  on("searchBtn", "click", () => {
-    const value = resolveSurnameQuery(byId("surnameInput").value);
-    renderSurname(value);
-    document.querySelector("#profile").scrollIntoView({ behavior: "smooth" });
-  });
+  on("searchBtn", "click", renderPublicSurnameSearch);
   on("surnameInput", "keydown", event => {
     if (event.key === "Enter") byId("searchBtn").click();
   });
@@ -1441,6 +1598,16 @@ function hydrateWorkspace() {
     const target = event.target.closest("[data-tab]");
     if (!target) return;
     setTab(target.dataset.tab);
+  });
+  on("tab-migration", "mouseover", event => {
+    const node = event.target.closest("[data-route-node]");
+    if (!node) return;
+    node.classList.add("active");
+  });
+  on("tab-migration", "mouseout", event => {
+    const node = event.target.closest("[data-route-node]");
+    if (!node) return;
+    node.classList.remove("active");
   });
   on("favoriteBtn", "click", () => {
     const name = getCurrentSurname();

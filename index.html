@@ -57,7 +57,7 @@
             <input id="surnameInput" value="陈" maxlength="4" placeholder="姓氏 / 拼音" aria-label="输入姓氏或拼音">
             <button id="searchBtn">查档案</button>
           </div>
-          <p class="muted">支持姓氏或拼音查询。未知姓氏会生成待收录档案，可继续补资料、跑 AI 初稿。</p>
+          <p class="muted">支持姓氏或拼音查询。未知姓氏会生成 AI 临时初稿，管理员审核后才会进入正式资料库。</p>
           <div class="hot-list" id="hotList"></div>
         </aside>
       </div>
@@ -149,6 +149,7 @@
     百家姓溯源录 · 网站 MVP · 后续可复用为小程序信息架构
   </footer>
 
+  <script src="assets/vendor/d3/d3.min.js" defer></script>
   <script src="assets/app.js" defer></script>
 </body>
 </html>

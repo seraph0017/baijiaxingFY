@@ -22,7 +22,7 @@
 
 ## 本期已实现
 
-- 姓氏一键查询：初始资料由 Node 服务提供，支持陈、王、李样板姓氏；首页改为深色搜索台和姓氏宫格，可按简体、繁体或拼音命中已沉淀姓氏，新增资料、AI 初稿、反馈也会复用同一套当前姓氏解析；未知汉字姓氏自动创建待收录档案，未命中的拉丁/数字/标点混合输入不会写入姓氏库。
+- 姓氏一键查询：初始资料由 Node 服务提供，支持陈、王、李样板姓氏；首页改为深色搜索台和姓氏宫格，可按简体、繁体或拼音命中已沉淀姓氏，新增资料、AI 初稿、反馈也会复用同一套当前姓氏解析；前台未知汉字姓氏只生成 AI 临时初稿，管理员审核前不会写入正式资料库；未命中的拉丁/数字/标点混合输入不会写入姓氏库。
 - 公开查询 API：提供姓氏列表与单姓详情接口，后续小程序可直接复用。
 - 姓氏档案：简体/繁体、拼音、起源朝代、始祖线索、郡望、堂号、源流分支；详情页改为大号姓氏身份卡、可信信息胶囊、分段 Tab 和深色档案卡片，状态会区分“已审核发布 / 来源待核 / 待收录 / 待补来源”。
 - 迁徙路线：路线节点可视化 + 四阶段时间轴。
@@ -182,7 +182,7 @@ curl http://localhost:8765/api/health
 ```
 
 Docker 镜像内置 `HEALTHCHECK`，容器平台会定期请求 `/api/health` 判断实例状态。
-生产环境缺少 `ADMIN_TOKEN`、`AI_ENDPOINT`、`AI_API_KEY`，或 AI endpoint 不是 HTTP(S) URL 时，`/api/health` 会返回 503，容器平台应将实例标记为未就绪。
+生产环境缺少 `ADMIN_TOKEN`、运行目录不可写，或备份目录不可用时，`/api/health` 会返回 503，容器平台应将实例标记为未就绪。AI 配置可由后台 Harness 持久化保存，缺少 `AI_ENDPOINT` / `AI_API_KEY` 不会让健康检查失败，但会让 AI 生成接口返回可操作错误，直到后台完成配置。
 镜像内也包含 `verify-*.mjs` 验收脚本，便于部署前在容器内执行 `npm run verify:release` 做自检。
 
 容器内 release 自检需要带齐生产必需环境变量：
@@ -199,11 +199,11 @@ docker run --rm \
 生产建议：
 
 - 必须设置强 `ADMIN_TOKEN`；生产环境缺少 `ADMIN_TOKEN` 或仅填写空白字符时，后台读写和 AI 代理接口会拒绝服务，健康检查返回 503。
-- 健康检查会同时验证生产配置、AI endpoint 格式、运行目录可写性和备份目录可用性；`DATA_DIR` 不可写或 `data/backups/` 被误建成文件时返回 503，避免容器平台把无法保存资料的实例标记为 healthy。健康检查使用随机探针文件验证写入能力，避免并发探针文件名冲突导致误报。健康检查响应不会返回服务器运行目录绝对路径、底层存储错误或具体缺失配置名，只返回配置摘要和脱敏错误。
+- 健康检查会同时验证生产后台令牌、运行目录可写性和备份目录可用性；`DATA_DIR` 不可写或 `data/backups/` 被误建成文件时返回 503，避免容器平台把无法保存资料的实例标记为 healthy。健康检查使用随机探针文件验证写入能力，避免并发探针文件名冲突导致误报。健康检查响应不会返回服务器运行目录绝对路径、底层存储错误或具体缺失配置名，只返回配置摘要和脱敏错误。
 - 必须把 `SITE_ORIGIN` 设置为正式 HTTP(S) 访问域名，服务端会用它生成 `robots.txt` 和 `sitemap.xml` 内的完整地址；如果误填空白字符或非 HTTP(S) 地址，服务端会回退到默认 `http://HOST:PORT`，避免生成空白、脚本协议或非法 canonical / sitemap 地址。
 - 把运行目录挂载为持久卷，保留 `workspace.json`、`audit.log` 和备份文件；镜像内置的 `data/seed-workspace.json` 不应被运行卷覆盖。
 - 当前源码交付目录只保留 `data/seed-workspace.json`；运行态 `workspace.json`、`audit.log`、`feedback.jsonl` 和 `backups/` 会在服务运行后生成，不应作为初始交付数据随包带出。
-- 反向代理公开暴露 `GET /`、`GET /assets/*`、`GET /robots.txt`、`GET /sitemap.xml`、`GET /manifest.webmanifest`、`GET/HEAD /api/health`、`GET /api/bootstrap`、`GET /api/surnames`、`GET /api/surname`。`GET /api/workspace` 需管理令牌，只给运营台读取完整工作区。
+- 反向代理公开暴露 `GET /`、`GET /assets/*`、`GET /robots.txt`、`GET /sitemap.xml`、`GET /manifest.webmanifest`、`GET/HEAD /api/health`、`GET /api/bootstrap`、`GET /api/surnames`、`GET /api/surname`、`POST /api/public-ai-draft`。`POST /api/public-ai-draft` 只接受 `surname`，使用服务端保存的 Harness 配置生成 `transient: true` 临时初稿，不接受前台自定义 endpoint、key、model 或 messages，也不会把 AI 正文写入工作区。`GET /api/workspace` 需管理令牌，只给运营台读取完整工作区。
 - `AI_API_KEY` 只放服务端环境变量，不写入前端页面或资料 JSON。
 
 ## 验收方式
@@ -236,10 +236,11 @@ npm run verify:server
 
 Node 服务提供：
 
-- `GET/HEAD /api/health`：服务健康检查；生产配置缺失、AI endpoint 格式错误或运行目录不可写时返回 503，响应不暴露服务器路径或具体缺失配置名；`HEAD` 仅返回状态和响应头，便于网关或监控轻量探测。
+- `GET/HEAD /api/health`：服务健康检查；生产后台令牌缺失、运行目录不可写或备份目录不可用时返回 503，响应不暴露服务器路径或具体缺失配置名；`HEAD` 仅返回状态和响应头，便于网关或监控轻量探测。
 - `GET /api/bootstrap`：读取 `data/seed-workspace.json` 初始资料库。
 - `GET /api/surnames`：读取公开姓氏摘要列表，适合首页、搜索页、小程序列表页复用；支持 `q` 和 `limit`，例如 `/api/surnames?q=chen&limit=20`，单次最多返回 500 条，覆盖百家姓、复姓和运营增补姓氏。`q=陈姓`、`q=陈氏`、`q=陈姓氏`、`q=欧阳姓`、`q=欧阳氏`、`q=欧阳姓氏` 会自动按 `陈`、`欧阳` 参与匹配。
 - `GET /api/surname?name=陈`：读取单个姓氏完整档案，未收录时返回 404；支持 `name=chen`、`name=陳` 这类拼音或繁体等值查询，便于小程序搜索页直接复用详情接口；公开返回会补齐前端可渲染的默认字段，避免资料沉淀阶段的半成品档案导致页面白屏。
+- `POST /api/public-ai-draft`：前台未知汉字姓氏的 AI 临时预览接口，只接受 `{ "surname": "徐" }` 这类请求体；服务端使用已保存的 Harness 配置拼装固定提示词，返回 `{ ok, surname, draft, transient: true }`，不接受前台传入 endpoint、API Key、model 或 messages。该接口按 `AI_LIMIT_PER_MINUTE` 限流，只记录 `public.ai.preview` 审计事件和姓氏摘要，不把 AI 正文持久化到工作区、反馈、审核队列或审计日志。
 - `GET /api/workspace`：读取 `data/workspace.json` 完整工作区；生产设置 `ADMIN_TOKEN` 后需要 `X-Admin-Token`，前台页面默认通过公开姓氏 API 初始化；运行态工作区损坏时返回明确恢复提示，公开查询接口仍回退种子库保障前台可用。
 - `POST /api/workspace`：保存当前姓氏库、Markdown 资料和审核队列；服务端会拒绝拉丁/数字/标点混合姓氏档案、资料姓氏和审核姓氏，避免绕过前端污染长期资料库。
 - `DELETE /api/workspace`：清空服务端工作区；清空前会自动备份当前 `workspace.json`。

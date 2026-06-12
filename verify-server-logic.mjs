@@ -441,6 +441,45 @@ await expectOk("AI 网络异常不泄漏错误正文", networkAiError.status ===
   && /AI 接口网络异常/.test(networkAiError.json?.error || "")
   && !/sk-network-secret|network-front-secret|network leaked/.test(networkAiError.text));
 
+const publicAiInvalidBody = await callRoute({
+  method: "POST",
+  url: "/api/public-ai-draft",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ messages: [{ role: "user", content: "不要允许前台传任意 messages" }] })
+});
+await expectOk("公开 AI 只接受姓氏", publicAiInvalidBody.status === 400 && /姓氏/.test(publicAiInvalidBody.json?.error || ""));
+
+globalThis.fetch = async (endpoint, options) => new Response(JSON.stringify({
+  choices: [{ message: { content: `基础档案：\n- 简体：徐\n- 繁体：徐\n- 拼音：Xu\n- 起源朝代线索：周代嬴姓徐国相关待核\n- 得姓始祖线索：徐若木待核\n- 郡望：东海郡待核\n- 堂号：东海堂待核\n\n源流分支：\n- 典籍记载源流：徐国之后，可信等级：待核。\n\n迁徙路线：\n- 先秦：徐国故地向周边迁徙。\n- 秦汉：东海郡望线索待核。\n- 唐宋元明清：江南宗族资料待核。\n- 近现代：公开人口分布资料待核。\n\n望族分支：\n- 东海郡望分支待核。\n\n名人典故：\n- 徐姓名人资料待核。\n\n家风家训：\n- 徐姓家风材料待核。\n\n参考来源：\n- 建议查《通志·氏族略》和地方志。\n\n审核风险：\n- 徐国源流需核对原典。` } }]
+}), {
+  status: 200,
+  headers: { "content-type": "application/json" }
+});
+const workspaceBeforePublicAi = existsSync(join(runtimeDir, "workspace.json"))
+  ? readFileSync(join(runtimeDir, "workspace.json"), "utf8")
+  : "";
+const publicAiPreview = await callRoute({
+  method: "POST",
+  url: "/api/public-ai-draft",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ surname: "徐" })
+});
+globalThis.fetch = originalFetch;
+const workspaceAfterPublicAi = existsSync(join(runtimeDir, "workspace.json"))
+  ? readFileSync(join(runtimeDir, "workspace.json"), "utf8")
+  : "";
+await expectOk("公开 AI 生成临时初稿不写工作区", publicAiPreview.status === 200
+  && publicAiPreview.json?.draft?.includes("基础档案")
+  && publicAiPreview.json?.surname === "徐"
+  && workspaceAfterPublicAi === workspaceBeforePublicAi);
+const auditAfterPublicAi = existsSync(join(runtimeDir, "audit.log"))
+  ? readFileSync(join(runtimeDir, "audit.log"), "utf8")
+  : "";
+await expectOk("公开 AI 审计不记录初稿正文", auditAfterPublicAi.includes("public.ai.preview")
+  && auditAfterPublicAi.includes("\"surname\":\"徐\"")
+  && !auditAfterPublicAi.includes("徐国之后")
+  && !auditAfterPublicAi.includes("基础档案："));
+
 const feedbackWithoutSurname = await callRoute({
   method: "POST",
   url: "/api/feedback",
@@ -737,4 +776,4 @@ await expectOk("清空工作区", cleared.status === 200 && cleared.json?.ok);
 
 rmSync(runtimeDir, { recursive: true, force: true });
 
-console.log("服务端逻辑检查通过：107/107");
+console.log("服务端逻辑检查通过：110/110");

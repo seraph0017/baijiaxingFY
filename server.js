@@ -125,6 +125,7 @@ const apiAllowedMethods = new Map([
   ["/api/bootstrap", "GET"],
   ["/api/surnames", "GET"],
   ["/api/surname", "GET"],
+  ["/api/public-ai-draft", "POST"],
   ["/api/workspace", "GET, POST, DELETE"],
   ["/api/audit", "GET"],
   ["/api/feedback", "GET, POST, PATCH"],
@@ -604,6 +605,53 @@ function validateAiMessages(messages) {
   ))) {
     throw validationError("AI messages 条目必须包含 role 和 content");
   }
+}
+
+function buildPublicAiDraftMessages(surname) {
+  const config = readHarnessConfigRaw();
+  const systemPrompt = config.systemPrompt || defaultHarnessConfig().systemPrompt;
+  return [
+    {
+      role: "system",
+      content: systemPrompt
+    },
+    {
+      role: "user",
+      content: [
+        `请生成${surname}姓的前台临时 AI 初稿。`,
+        "这是未经管理员审核的公开预览，不要写成定论。必须用“待核线索”“建议查证”这类措辞。",
+        "输出必须使用以下 8 个字段标题，顺序不要变：",
+        "1. 基础档案：简体、繁体、拼音、起源朝代线索、得姓始祖线索、郡望、堂号。",
+        "2. 源流分支：至少 3 条，区分典籍记载、地方志线索、族谱/民间说法，并标注可信等级。",
+        "3. 迁徙路线：至少 4 个阶段，按先秦/秦汉、魏晋南北朝、唐宋元明清、近现代组织。",
+        "4. 望族分支：至少 3 条。",
+        "5. 名人典故：至少 3 条。",
+        "6. 家风家训：至少 2 条。",
+        "7. 参考来源：列出建议查证的典籍、方志、族谱或公开资料类型。",
+        "8. 审核风险：列出 3-5 条需要人工核对的争议点。",
+        "每个字段都要有内容；资料不足时写具体查证方向，不要只写“待补充”。"
+      ].join("\n")
+    }
+  ];
+}
+
+function normalizePublicAiDraftPayload(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw validationError("公开 AI 请求必须是 JSON 对象");
+  }
+  const surname = normalizeSurnameName(payload.surname);
+  if (!surname || isLatinLikeName(payload.surname)) {
+    throw validationError("公开 AI 生成需要有效汉字姓氏");
+  }
+  return surname;
+}
+
+async function callPublicAiDraft(surname) {
+  const payload = {
+    messages: buildPublicAiDraftMessages(surname)
+  };
+  const aiPayload = await callCompatibleAi(payload);
+  return aiPayload?.choices?.[0]?.message?.content || "AI 已返回，但未解析到正文。";
 }
 
 function assertWorkspaceShape(payload) {
@@ -1315,6 +1363,16 @@ export async function handleRequest(req, res) {
       const surname = workspace.surnames?.[name];
       if (!surname) throw httpError("姓氏暂未收录", 404);
       send(res, 200, { ok: true, surname: normalizePublicSurnameProfile(surname, name) });
+      return;
+    }
+
+    if (url.pathname === "/api/public-ai-draft" && req.method === "POST") {
+      enforceRateLimit(req, "public.ai.draft", AI_LIMIT_PER_MINUTE);
+      const body = await readJsonBody(req);
+      const surname = normalizePublicAiDraftPayload(body);
+      const draft = await callPublicAiDraft(surname);
+      await appendAuditAsync("public.ai.preview", req, { surname });
+      send(res, 200, { ok: true, surname, draft, transient: true });
       return;
     }
 
