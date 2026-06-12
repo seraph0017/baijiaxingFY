@@ -335,6 +335,21 @@ function hydrateWorkspace() {
     }
   }
 
+  async function hydratePublicWorkspace() {
+    try {
+      await hydratePublicApiWorkspace();
+      return true;
+    } catch {
+      try {
+        await hydrateSeedWorkspace();
+        return true;
+      } catch {
+        hydrateWorkspace();
+        return false;
+      }
+    }
+  }
+
   function exportWorkspace() {
     const json = JSON.stringify(getWorkspaceSnapshot(), null, 2);
     const blob = new Blob([json], { type: "application/json" });
@@ -1559,7 +1574,7 @@ function hydrateWorkspace() {
   }
 
   async function initializeApp() {
-    const serverReady = await initializeWorkspace();
+    const serverReady = await hydratePublicWorkspace();
     renderHotList();
     renderRepositoryStats();
     renderReviewQueue();
