@@ -203,7 +203,7 @@ docker run --rm \
 - 必须把 `SITE_ORIGIN` 设置为正式 HTTP(S) 访问域名，服务端会用它生成 `robots.txt` 和 `sitemap.xml` 内的完整地址；如果误填空白字符或非 HTTP(S) 地址，服务端会回退到默认 `http://HOST:PORT`，避免生成空白、脚本协议或非法 canonical / sitemap 地址。
 - 把运行目录挂载为持久卷，保留 `workspace.json`、`audit.log` 和备份文件；镜像内置的 `data/seed-workspace.json` 不应被运行卷覆盖。
 - 当前源码交付目录只保留 `data/seed-workspace.json`；运行态 `workspace.json`、`audit.log`、`feedback.jsonl` 和 `backups/` 会在服务运行后生成，不应作为初始交付数据随包带出。
-- 反向代理公开暴露 `GET /`、`GET /assets/*`、`GET /robots.txt`、`GET /sitemap.xml`、`GET /manifest.webmanifest`、`GET/HEAD /api/health`、`GET /api/bootstrap`、`GET /api/surnames`、`GET /api/surname`、`POST /api/public-ai-draft`。`POST /api/public-ai-draft` 只接受 `surname`，使用服务端保存的 Harness 配置生成 `transient: true` 临时初稿，不接受前台自定义 endpoint、key、model 或 messages，也不会把 AI 正文写入工作区。`GET /api/workspace` 需管理令牌，只给运营台读取完整工作区。
+- 反向代理公开暴露 `GET /`、`GET /assets/*`、`GET /robots.txt`、`GET /sitemap.xml`、`GET /manifest.webmanifest`、`GET/HEAD /api/health`、`GET /api/bootstrap`、`GET /api/surnames`、`GET /api/surname`、`POST /api/public-ai-draft`。`POST /api/public-ai-draft` 只接受 `surname`，使用服务端保存的 Harness 配置生成 `transient: true` 临时初稿；AI 配置缺失或上游失败时返回离线临时稿和 `fallback: true`，前台仍可展示，不接受前台自定义 endpoint、key、model 或 messages，也不会把 AI 正文写入工作区。`GET /api/workspace` 需管理令牌，只给运营台读取完整工作区。
 - `AI_API_KEY` 只放服务端环境变量，不写入前端页面或资料 JSON。
 
 ## 验收方式
@@ -240,7 +240,7 @@ Node 服务提供：
 - `GET /api/bootstrap`：读取 `data/seed-workspace.json` 初始资料库。
 - `GET /api/surnames`：读取公开姓氏摘要列表，适合首页、搜索页、小程序列表页复用；支持 `q` 和 `limit`，例如 `/api/surnames?q=chen&limit=20`，单次最多返回 500 条，覆盖百家姓、复姓和运营增补姓氏。`q=陈姓`、`q=陈氏`、`q=陈姓氏`、`q=欧阳姓`、`q=欧阳氏`、`q=欧阳姓氏` 会自动按 `陈`、`欧阳` 参与匹配。
 - `GET /api/surname?name=陈`：读取单个姓氏完整档案，未收录时返回 404；支持 `name=chen`、`name=陳` 这类拼音或繁体等值查询，便于小程序搜索页直接复用详情接口；公开返回会补齐前端可渲染的默认字段，避免资料沉淀阶段的半成品档案导致页面白屏。
-- `POST /api/public-ai-draft`：前台未知汉字姓氏的 AI 临时预览接口，只接受 `{ "surname": "徐" }` 这类请求体；服务端使用已保存的 Harness 配置拼装固定提示词，返回 `{ ok, surname, draft, transient: true }`，不接受前台传入 endpoint、API Key、model 或 messages。该接口按 `AI_LIMIT_PER_MINUTE` 限流，只记录 `public.ai.preview` 审计事件和姓氏摘要，不把 AI 正文持久化到工作区、反馈、审核队列或审计日志。
+- `POST /api/public-ai-draft`：前台未知汉字姓氏的 AI 临时预览接口，只接受 `{ "surname": "徐" }` 这类请求体；服务端使用已保存的 Harness 配置拼装固定提示词，AI 配置缺失或上游失败时返回离线临时稿，响应包含 `{ ok, surname, draft, transient: true, fallback }`，不接受前台传入 endpoint、API Key、model 或 messages。该接口按 `AI_LIMIT_PER_MINUTE` 限流，只记录 `public.ai.preview` 审计事件和姓氏摘要，不把 AI 正文持久化到工作区、反馈、审核队列或审计日志。
 - `GET /api/workspace`：读取 `data/workspace.json` 完整工作区；生产设置 `ADMIN_TOKEN` 后需要 `X-Admin-Token`，前台页面默认通过公开姓氏 API 初始化；运行态工作区损坏时返回明确恢复提示，公开查询接口仍回退种子库保障前台可用。
 - `POST /api/workspace`：保存当前姓氏库、Markdown 资料和审核队列；服务端会拒绝拉丁/数字/标点混合姓氏档案、资料姓氏和审核姓氏，避免绕过前端污染长期资料库。
 - `DELETE /api/workspace`：清空服务端工作区；清空前会自动备份当前 `workspace.json`。

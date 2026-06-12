@@ -480,6 +480,25 @@ await expectOk("公开 AI 审计不记录初稿正文", auditAfterPublicAi.inclu
   && !auditAfterPublicAi.includes("徐国之后")
   && !auditAfterPublicAi.includes("基础档案："));
 
+globalThis.fetch = async () => {
+  throw new Error("public ai offline fallback");
+};
+const publicAiOfflinePreview = await callRoute({
+  method: "POST",
+  url: "/api/public-ai-draft",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ surname: "慕容" })
+});
+globalThis.fetch = originalFetch;
+await expectOk("公开 AI 配置缺失返回离线临时初稿", publicAiOfflinePreview.status === 200
+  && publicAiOfflinePreview.json?.fallback === true
+  && publicAiOfflinePreview.json?.transient === true
+  && publicAiOfflinePreview.json?.surname === "慕容"
+  && publicAiOfflinePreview.json?.draft?.includes("基础档案：")
+  && publicAiOfflinePreview.json?.draft?.includes("源流分支：")
+  && publicAiOfflinePreview.json?.draft?.includes("迁徙路线：")
+  && publicAiOfflinePreview.json?.draft?.includes("审核风险："));
+
 const feedbackWithoutSurname = await callRoute({
   method: "POST",
   url: "/api/feedback",
@@ -785,4 +804,4 @@ await expectOk("清空工作区", cleared.status === 200 && cleared.json?.ok);
 
 rmSync(runtimeDir, { recursive: true, force: true });
 
-console.log("服务端逻辑检查通过：110/110");
+console.log("服务端逻辑检查通过：111/111");

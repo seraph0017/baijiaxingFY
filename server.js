@@ -635,6 +635,55 @@ function buildPublicAiDraftMessages(surname) {
   ];
 }
 
+function buildOfflinePublicAiDraft(surname) {
+  return [
+    "基础档案：",
+    `- 简体：${surname}`,
+    `- 繁体：${surname}`,
+    "- 拼音：需核：建议查普通话读音、方言读音和常见罗马化写法。",
+    "- 起源朝代线索：需核：建议先查《通志·氏族略》、地方志、姓氏辞典和相关族谱目录。",
+    "- 得姓始祖线索：需核：建议核对典籍记载、族谱序文和地方志人物条目。",
+    "- 郡望：需核：建议查郡望堂号类资料、谱牒目录和地方志氏族章节。",
+    "- 堂号：需核：建议查宗祠楹联、族谱堂号页和地方文史资料。",
+    "",
+    "源流分支：",
+    "- 典籍记载线索：建议检索正史、类书和姓氏专著中的该姓条目，可信等级：待核。",
+    "- 地方志线索：建议按发源地、郡望地、迁居地检索府县志氏族、人物、祠庙章节，可信等级：待核。",
+    "- 族谱/民间说法：建议收集族谱序文、字辈、迁徙记和口述材料，并与公开典籍互证，可信等级：需复核。",
+    "",
+    "迁徙路线：",
+    "- 先秦/秦汉：需核：先确定早期得姓地、封国地或郡望地，再追踪周边迁居线索。",
+    "- 魏晋南北朝：需核：关注战乱、仕宦、避居和士族南迁相关资料。",
+    "- 唐宋元明清：需核：按科举、军屯、商贸、移民实录和地方志人口流动线索整理。",
+    "- 近现代：需核：结合公开人口分布、侨迁资料和地方文史记录补充分布变化。",
+    "",
+    "望族分支：",
+    "- 郡望分支：需核：查郡望来源和代表人物，避免把同名地望直接当成定论。",
+    "- 堂号分支：需核：整理堂号、宗祠和族谱中可互证的分支。",
+    "- 地域分支：需核：按省府县和迁徙节点归纳，标明资料来源。",
+    "",
+    "名人典故：",
+    "- 历史人物：需核：优先查正史、地方志人物传和权威工具书。",
+    "- 典故线索：需核：区分历史事件、文学演义和民间传说。",
+    "- 当代资料：需核：只采用公开可核验资料，避免个人隐私和无来源内容。",
+    "",
+    "家风家训：",
+    "- 族谱家训：需核：查族谱凡例、家训、祠规和谱序原文。",
+    "- 宗祠楹联：需核：查地方文史、宗祠碑刻和楹联资料。",
+    "",
+    "参考来源：",
+    "- 建议查证：《通志·氏族略》、地方志、姓氏辞典、族谱目录、宗祠碑刻、公开人口分布资料。",
+    "- 建议补充：原文摘录、版本信息、页码、出版信息或公开链接。",
+    "",
+    "审核风险：",
+    "- 早期源流可能存在多说并存，不能写成唯一结论。",
+    "- 始祖、郡望、堂号需要原文出处支撑。",
+    "- 族谱材料需要标明谱系范围，避免泛化到整个姓氏。",
+    "- 名人典故需区分同姓名人、传说人物和文学形象。",
+    "- 迁徙路线需要按时代和地域证据逐步核对。"
+  ].join("\n");
+}
+
 function normalizePublicAiDraftPayload(payload) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     throw validationError("公开 AI 请求必须是 JSON 对象");
@@ -650,8 +699,18 @@ async function callPublicAiDraft(surname) {
   const payload = {
     messages: buildPublicAiDraftMessages(surname)
   };
-  const aiPayload = await callCompatibleAi(payload);
-  return aiPayload?.choices?.[0]?.message?.content || "AI 已返回，但未解析到正文。";
+  try {
+    const aiPayload = await callCompatibleAi(payload);
+    return {
+      draft: aiPayload?.choices?.[0]?.message?.content || buildOfflinePublicAiDraft(surname),
+      fallback: false
+    };
+  } catch {
+    return {
+      draft: buildOfflinePublicAiDraft(surname),
+      fallback: true
+    };
+  }
 }
 
 function assertWorkspaceShape(payload) {
@@ -1370,9 +1429,9 @@ export async function handleRequest(req, res) {
       enforceRateLimit(req, "public.ai.draft", AI_LIMIT_PER_MINUTE);
       const body = await readJsonBody(req);
       const surname = normalizePublicAiDraftPayload(body);
-      const draft = await callPublicAiDraft(surname);
+      const { draft, fallback } = await callPublicAiDraft(surname);
       await appendAuditAsync("public.ai.preview", req, { surname });
-      send(res, 200, { ok: true, surname, draft, transient: true });
+      send(res, 200, { ok: true, surname, draft, transient: true, fallback });
       return;
     }
 
