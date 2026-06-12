@@ -28,6 +28,7 @@ expectOk("后台 Harness 可配置", ["harnessEndpoint", "harnessModel", "harnes
 expectOk("首屏工作台结构", html.includes('class="hero-panel"') && html.includes('class="ops-panel"') && html.includes("百家姓溯源录"));
 expectOk("首页可信证据可见", html.includes("多源并列") && html.includes("出处标注") && html.includes("人工审核") && /\.summary-grid\s*\{[^}]*display:\s*grid/.test(styles));
 expectOk("首页查询使用档案语言", html.includes('id="searchBtn">查档案</button>') && html.includes("姓氏 / 拼音"));
+expectOk("顶部导航轻量统一", html.includes('aria-current="page"') && !/\.nav-mode,\s*\n\.view-switcher button/.test(styles) && /\.nav-links\s+\.nav-mode\s*\{/.test(styles) && /\.nav-links\s+\.nav-mode\.active/.test(styles));
 expectOk("页面标题样式隔离", !/(^|\n)h1:after\s*\{/.test(styles) && /\.hero-copy h1:after/.test(styles) && !loginHtml.includes("AI 可信资料网络") && !adminHtml.includes("AI 可信资料网络"));
 expectOk("登录页独立后台入口", loginHtml.includes('class="login-card"') && loginHtml.includes('class="login-context"') && loginHtml.includes("文史编辑工作台"));
 expectOk("后台工作台指标区", adminHtml.includes('class="admin-overview"') && adminHtml.includes("待审核") && adminHtml.includes("待补资料") && adminHtml.includes("反馈工单") && adminHtml.includes("已发布"));
@@ -90,4 +91,4 @@ expectOk("未命中拼音不污染姓氏库", app.includes("function isLatinLike
 expectOk("复姓输入支持", app.includes("function normalizeSurnameInput") && app.includes("replace(/(姓氏|姓|氏)$/, \"\")") && app.includes("slice(0, 4)") && !app.includes(".value.trim().slice(0, 1)") && !app.includes("String(name || \"\").trim().slice(0, 1)"));
 expectOk("姓氏双字后缀归一化", app.includes("replace(/(姓氏|姓|氏)$/, \"\")"));
 
-console.log("UI 结构检查通过：72/72");
+console.log("UI 结构检查通过：73/73");
