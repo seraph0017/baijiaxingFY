@@ -679,7 +679,15 @@ function hydrateWorkspace() {
     const escaped = labels.map(label => label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
     const pattern = new RegExp(`(?:${escaped})\\s*[=：:]\\s*([^；;，,\\n]+)`);
     const match = String(draft || "").match(pattern);
-    return match ? match[1].trim().replace(/[。.]$/, "") : "";
+    return match ? cleanupAiProfileValue(match[1]) : "";
+  }
+
+  function cleanupAiProfileValue(value) {
+    return String(value || "")
+      .trim()
+      .replace(/^(?:线索|需核|待核|建议查证|建议先查)\s*[：:]\s*/, "")
+      .replace(/[。.]$/, "")
+      .trim();
   }
 
   function extractAiSection(draft, title) {
@@ -765,8 +773,8 @@ function hydrateWorkspace() {
     const data = surnames[surname] || createPendingSurname(surname, { persist: false });
     const traditional = extractAiProfileField(draft, ["繁体", "繁體"]) || data.traditional || data.char;
     const pinyin = extractAiProfileField(draft, ["拼音", "读音", "讀音"]) || data.pinyin || data.info?.["拼音"];
-    const dynasty = extractAiProfileField(draft, ["起源朝代", "朝代线索", "起源时期"]) || data.dynasty || data.info?.["起源朝代"];
-    const ancestor = extractAiProfileField(draft, ["得姓始祖", "始祖线索", "始祖"]) || data.ancestor || data.info?.["得姓始祖"];
+    const dynasty = extractAiProfileField(draft, ["起源朝代线索", "起源朝代", "朝代线索", "起源时期"]) || data.dynasty || data.info?.["起源朝代"];
+    const ancestor = extractAiProfileField(draft, ["得姓始祖线索", "得姓始祖", "始祖线索", "始祖"]) || data.ancestor || data.info?.["得姓始祖"];
     const junwang = extractAiProfileField(draft, ["郡望"]) || data.info?.["郡望"];
     const tanghao = extractAiProfileField(draft, ["堂号", "堂號"]) || data.info?.["堂号"];
     const summary = summarizeAiSection(

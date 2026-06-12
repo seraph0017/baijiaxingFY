@@ -499,6 +499,26 @@ await expectOk("公开 AI 配置缺失返回离线临时初稿", publicAiOffline
   && publicAiOfflinePreview.json?.draft?.includes("迁徙路线：")
   && publicAiOfflinePreview.json?.draft?.includes("审核风险："));
 
+globalThis.fetch = async () => {
+  throw new Error("public ai xushi fallback");
+};
+const publicXuOfflinePreview = await callRoute({
+  method: "POST",
+  url: "/api/public-ai-draft",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ surname: "徐" })
+});
+globalThis.fetch = originalFetch;
+await expectOk("徐姓公开离线初稿填充核心字段", publicXuOfflinePreview.status === 200
+  && publicXuOfflinePreview.json?.draft?.includes("- 拼音：Xu")
+  && publicXuOfflinePreview.json?.draft?.includes("- 起源朝代线索：周代")
+  && publicXuOfflinePreview.json?.draft?.includes("- 得姓始祖线索：徐若木、徐偃王等线索并存")
+  && publicXuOfflinePreview.json?.draft?.includes("- 郡望：东海郡、高平郡等")
+  && publicXuOfflinePreview.json?.draft?.includes("- 堂号：东海堂、高平堂等")
+  && !publicXuOfflinePreview.json?.draft?.includes("- 拼音：需核")
+  && !publicXuOfflinePreview.json?.draft?.includes("- 郡望：需核")
+  && !publicXuOfflinePreview.json?.draft?.includes("- 堂号：需核"));
+
 const feedbackWithoutSurname = await callRoute({
   method: "POST",
   url: "/api/feedback",
@@ -804,4 +824,4 @@ await expectOk("清空工作区", cleared.status === 200 && cleared.json?.ok);
 
 rmSync(runtimeDir, { recursive: true, force: true });
 
-console.log("服务端逻辑检查通过：111/111");
+console.log("服务端逻辑检查通过：112/112");
