@@ -690,8 +690,20 @@ function hydrateWorkspace() {
       .trim();
   }
 
+  function normalizeAiSectionTitle(title) {
+    return String(title || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
+  function buildAiSectionPattern(title) {
+    const titles = ["基础档案", "源流摘要", "源流分支", "迁徙路线", "望族分支", "名人典故", "家风家训", "参考来源", "审核风险"];
+    const titleAlternation = titles.map(normalizeAiSectionTitle).join("|");
+    const marker = String.raw`(?:^|\n)\s*(?:#{1,6}\s*)?(?:\*\*)?(?:\d+[.、)]\s*)?`;
+    const suffix = String.raw`(?:\*\*)?\s*[：:]?\s*`;
+    return new RegExp(`${marker}${normalizeAiSectionTitle(title)}${suffix}([\\s\\S]*?)(?=${marker}(?:${titleAlternation})${suffix}|$)`);
+  }
+
   function extractAiSection(draft, title) {
-    const pattern = new RegExp(`${title}[：:]\\s*([\\s\\S]*?)(?=\\n\\s*(?:源流分支|迁徙路线|望族分支|名人典故|家风家训|参考来源|审核风险)[：:]|$)`);
+    const pattern = buildAiSectionPattern(title);
     const match = String(draft || "").match(pattern);
     return match ? match[1].trim() : "";
   }

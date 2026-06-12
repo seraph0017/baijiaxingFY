@@ -71,6 +71,7 @@ expectOk("AI Harness 服务端代理优先", app.includes("const draft = await c
 expectOk("AI 初稿字段充实约束", app.includes("slice(0, 8)") && app.includes("每个字段必须给出可审核内容") && app.includes("不要把字段值写成“待补充”") && app.includes("基础档案：") && app.includes("源流分支：") && app.includes("迁徙路线：") && app.includes("望族分支：") && app.includes("名人典故：") && app.includes("家风家训：") && app.includes("参考来源：") && app.includes("审核风险："));
 expectOk("AI 初稿自动回填档案字段", app.includes("function applyAiDraftToProfile") && app.includes("function extractAiProfileField") && app.includes("function cleanupAiProfileValue") && app.includes("\"起源朝代线索\"") && app.includes("\"得姓始祖线索\"") && app.includes("applyAiDraftToProfile(name, draft)") && app.includes("syncProfileEditor()") && app.includes("AI 初稿已回填到校订字段"));
 expectOk("AI 初稿自动回填结构化分支", app.includes("function parseAiListSection") && app.includes("function parseAiOrigins") && app.includes("function parseAiMigrations") && app.includes("function parseAiFigures") && app.includes("data.origins = parsedOrigins") && app.includes("data.migrations = parsedMigrations") && app.includes("data.branches = parsedBranches") && app.includes("data.figures = parsedFigures") && app.includes("renderSurname(surname)") && app.includes("源流分支、迁徙路线、参考来源、审核风险已同步"));
+expectOk("AI 初稿兼容编号标题", app.includes("function normalizeAiSectionTitle") && app.includes("function buildAiSectionPattern") && app.includes("(?:\\d+[.、)]\\s*)?") && app.includes("[：:]?") && app.includes("extractAiSection(draft, \"源流分支\")"));
 expectOk("AI 初稿全字段落库", app.includes("function buildRouteFromMigrations") && app.includes("function parseAiSources") && app.includes("function parseAiRisks") && app.includes("data.route = buildRouteFromMigrations") && app.includes("data.sources = parsedSources") && app.includes("data.reviewRisks = parsedRisks") && app.includes("data.reviewRisks.map") && app.includes("参考来源、审核风险已同步"));
 expectOk("新姓氏默认字段不裸写待补充", app.includes("function buildPendingFieldHints") && app.includes("需核：普通话读音") && app.includes("需核：查郡望资料") && app.includes("需核：查堂号资料") && !app.includes('pinyin: "待补充"') && !app.includes('"拼音": "待补充"'));
 expectOk("AI Harness 页面文案同步", adminHtml.includes("优先调用服务端 AI 代理") && !adminHtml.includes("未填写 Key 时走离线样例"));
@@ -91,4 +92,4 @@ expectOk("未命中拼音不污染姓氏库", app.includes("function isLatinLike
 expectOk("复姓输入支持", app.includes("function normalizeSurnameInput") && app.includes("replace(/(姓氏|姓|氏)$/, \"\")") && app.includes("slice(0, 4)") && !app.includes(".value.trim().slice(0, 1)") && !app.includes("String(name || \"\").trim().slice(0, 1)"));
 expectOk("姓氏双字后缀归一化", app.includes("replace(/(姓氏|姓|氏)$/, \"\")"));
 
-console.log("UI 结构检查通过：73/73");
+console.log("UI 结构检查通过：74/74");
