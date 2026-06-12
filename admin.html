@@ -49,6 +49,18 @@
     <div id="adminApp" data-app-view="ops">
     <section class="inner section-band" id="profileEditor">
       <h2>姓氏档案编辑</h2>
+      <div class="card quick-surname-card">
+        <div class="section-title-row"><h3>当前姓氏</h3><span class="tag">一键生成</span></div>
+        <div class="quick-surname-row">
+          <div class="field">
+            <label for="activeSurnameInput">输入姓氏</label>
+            <input id="activeSurnameInput" value="陈" maxlength="4" placeholder="例如：徐">
+          </div>
+          <button class="secondary" id="switchSurnameBtn" type="button">切换 / 创建</button>
+          <button id="quickHarnessBtn" type="button">生成 AI 初稿</button>
+        </div>
+        <div class="source-status" id="activeSurnameStatus">输入一个姓氏，例如“徐”，即可创建待收录档案并生成初稿。</div>
+      </div>
       <div class="card">
         <div class="config-grid">
           <div class="field">

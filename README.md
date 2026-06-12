@@ -232,7 +232,7 @@ npm run verify:server
 
 ## AI Harness 技术口径
 
-当前页面内置一组 Markdown 样例语料，通过 `retrieveMarkdownContext` 做关键词召回，生成结构化上下文。Harness 会优先调用服务端 AI 代理，由 Node 服务读取 `AI_ENDPOINT`、`AI_MODEL`、`AI_API_KEY` 等环境变量并转发到 OpenAI-compatible `chat/completions` 接口；生产环境以服务端环境变量为准，必须设置 `AI_ENDPOINT` 和 `AI_API_KEY`，前端 API Key / Endpoint / 模型输入仅作为本地临时调试入口。服务端未配置、管理令牌错误或模型接口失败时回退到 `buildOfflineDraft` 离线初稿，保证演示可用。AI endpoint 必须是 HTTP(S) URL，`apiKey` 和 `model` 必须是非空字符串；配置格式错误直接返回 400。AI 上游非 200、网络异常或返回格式异常时，服务端只返回脱敏后的状态摘要，不把上游响应正文或底层错误正文透传到前端。
+当前页面内置一组 Markdown 样例语料，通过 `retrieveMarkdownContext` 做关键词召回，生成结构化上下文。运营台可在“当前姓氏”输入框里直接输入“徐”这类未收录姓氏，点击“生成 AI 初稿”时会自动创建待收录档案、切换当前姓氏并进入 Harness 生成流程。Harness 会优先调用服务端 AI 代理，由 Node 服务读取 `AI_ENDPOINT`、`AI_MODEL`、`AI_API_KEY` 等环境变量并转发到 OpenAI-compatible `chat/completions` 接口；生产环境以服务端环境变量为准，必须设置 `AI_ENDPOINT` 和 `AI_API_KEY`。后台保存的 Endpoint / 模型 / API Key 会写入运行态配置；配置 MySQL 时会持久化到 `app_kv` 的 `harness-config` 记录，API Key 也会随配置一起保存。后台再次保存配置时，如果 API Key 输入框留空，不会覆盖已保存 Key。服务端未配置、管理令牌错误或模型接口失败时回退到 `buildOfflineDraft` 离线初稿，保证演示可用。AI endpoint 必须是 HTTP(S) URL，`apiKey` 必须是非空且请求头安全的 ASCII 可见字符，`model` 必须是非空字符串；配置格式错误直接返回 400。AI 上游非 200、网络异常或返回格式异常时，服务端只返回脱敏后的状态摘要，不把上游响应正文或底层错误正文透传到前端。
 
 Node 服务提供：
 
@@ -265,6 +265,6 @@ Node 服务提供：
 
 ## 未入库姓氏补充方式
 
-- 单个姓氏：前台或运营台搜索框输入未收录汉字姓氏，系统会自动创建待收录档案，并进入审核队列；输入“陈姓”“陈氏”“陈姓氏”“欧阳姓”“欧阳氏”“欧阳姓氏”会自动按“陈”“欧阳”处理；输入已收录姓氏拼音如 `chen`、`wang`、`li` 会优先命中对应档案，并在新增 Markdown 资料、AI Harness、纠错反馈和档案编辑中保持一致；未命中的拉丁/数字/标点混合输入会回退到默认样板，不创建拉丁字母姓氏档案。
+- 单个姓氏：运营台“当前姓氏”输入框直接输入未收录汉字姓氏，例如 `徐`，点击“生成 AI 初稿”会自动创建待收录档案、切换当前姓氏并进入 AI Harness；前台搜索框输入未收录汉字姓氏也会创建待收录档案。输入“陈姓”“陈氏”“陈姓氏”“欧阳姓”“欧阳氏”“欧阳姓氏”会自动按“陈”“欧阳”处理；输入已收录姓氏拼音如 `chen`、`wang`、`li` 会优先命中对应档案，并在新增 Markdown 资料、AI Harness、纠错反馈和档案编辑中保持一致；未命中的拉丁/数字/标点混合输入会回退到默认样板，不创建拉丁字母姓氏档案。
 - 批量补充：运营工作台“批量补充姓氏”支持粘贴空格、逗号、顿号或换行分隔的汉字姓氏列表，一次性创建待收录档案，自动跳过已有姓氏，并过滤拉丁/数字/标点混合脏输入。
 - 后续沉淀：为新姓氏补 Markdown 资料，运行 AI Harness 生成初稿，再由编辑补充来源、可信等级和争议说明后发布。

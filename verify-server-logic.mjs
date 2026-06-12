@@ -353,6 +353,39 @@ const invalidAiApiKey = await callRoute({
 await expectOk("AI Key 非请求头安全字符返回 400", invalidAiApiKey.status === 400
   && /AI apiKey/.test(invalidAiApiKey.json?.error || ""));
 
+const saveHarnessKey = await callRoute({
+  method: "PUT",
+  url: "/api/harness-config",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({
+    endpoint: "https://api.example.test/v1/chat/completions",
+    apiKey: "persist-key",
+    model: "gpt-5.5",
+    systemPrompt: "只整理可信资料。",
+    temperature: 0.3,
+    retrievalQuery: "源流"
+  })
+});
+const keepHarnessKey = await callRoute({
+  method: "PUT",
+  url: "/api/harness-config",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({
+    endpoint: "https://api.example.test/v1/chat/completions",
+    apiKey: "",
+    model: "gpt-5.5",
+    systemPrompt: "只整理可信资料。",
+    temperature: 0.3,
+    retrievalQuery: "源流"
+  })
+});
+const harnessConfigAfterBlankKey = JSON.parse(readFileSync(join(runtimeDir, "harness-config.json"), "utf8"));
+await expectOk("Harness 空 Key 不覆盖已保存 Key", saveHarnessKey.status === 200
+  && keepHarnessKey.status === 200
+  && harnessConfigAfterBlankKey.apiKey === "persist-key"
+  && keepHarnessKey.json?.config?.hasApiKey === true
+  && !keepHarnessKey.text.includes("persist-key"));
+
 const blockedAuditPath = join(runtimeDir, "audit.log");
 rmSync(blockedAuditPath, { force: true });
 mkdirSync(blockedAuditPath, { recursive: true });

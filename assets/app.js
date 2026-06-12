@@ -467,6 +467,7 @@ function hydrateWorkspace() {
 
   function setCurrentSurname(name) {
     currentSurname = normalizeSurnameInput(name, currentSurname || "陈");
+    if (byId("activeSurnameInput")) byId("activeSurnameInput").value = currentSurname;
     return currentSurname;
   }
 
@@ -578,6 +579,21 @@ function hydrateWorkspace() {
     byId("batchSurnameStatus").textContent = created.length
     ? `已加入：${created.join("、")}。${skipped.length ? `已跳过已有：${skipped.join("、")}。` : ""}`
     : `未新增，全部已存在：${skipped.join("、")}。`;
+  }
+
+  function switchAdminSurname() {
+    const raw = byId("activeSurnameInput")?.value || currentSurname;
+    if (isLatinLikeQuery(raw)) {
+      if (byId("activeSurnameStatus")) byId("activeSurnameStatus").textContent = "请输入汉字姓氏，例如：徐。";
+      return "";
+    }
+    const name = setCurrentSurname(normalizeSurnameInput(raw, currentSurname || "陈"));
+    if (!surnames[name]) createPendingSurname(name);
+    syncProfileEditor();
+    renderRepositoryStats();
+    renderReviewQueue();
+    if (byId("activeSurnameStatus")) byId("activeSurnameStatus").textContent = `已切换到${name}姓，可直接生成 AI 初稿。`;
+    return name;
   }
 
   function retrieveMarkdownContext(surname, query, sourceTypes) {
@@ -1145,6 +1161,34 @@ function hydrateWorkspace() {
     }
   }
 
+  async function generateHarnessDraft() {
+    const name = byId("activeSurnameInput") ? switchAdminSurname() : getCurrentSurname();
+    if (!name) {
+      byId("harnessResult").textContent = "请先输入汉字姓氏，例如：徐。";
+      return;
+    }
+    const contextItems = retrieveMarkdownContext(name, byId("retrievalQuery").value, getSelectedSourceTypes());
+    byId("harnessResult").textContent = `已召回 ${contextItems.length} 条 Markdown 上下文，正在生成${name}姓初稿。`;
+    if (byId("activeSurnameStatus")) byId("activeSurnameStatus").textContent = `${name}姓初稿生成中，可在下方查看输出。`;
+    byId("aiDraft").textContent = "生成中...";
+    try {
+    const draft = await callAiModel({ surname: name, contextItems });
+    byId("aiDraft").textContent = draft;
+    byId("harnessResult").textContent = `已通过服务端 AI 代理生成${name}姓 AI 初稿，进入待审核队列。`;
+    if (byId("activeSurnameStatus")) byId("activeSurnameStatus").textContent = `${name}姓 AI 初稿已生成。`;
+    if (!reviewState.some(item => item.surname === name && item.title.includes("AI Harness"))) {
+      reviewState.unshift(createReviewItem(name, `${name}姓 AI Harness 初稿`, "AI 初稿", "文史编辑"));
+      renderRepositoryStats();
+      renderReviewQueue();
+      persistWorkspace(`${name}姓 AI 初稿已保存到审核队列。`);
+    }
+    } catch (error) {
+    byId("aiDraft").textContent = buildOfflineDraft(name, contextItems);
+    byId("harnessResult").textContent = `AI 接口调用失败，已回退到离线初稿：${error.message}`;
+    if (byId("activeSurnameStatus")) byId("activeSurnameStatus").textContent = `${name}姓已生成离线初稿，请检查 Harness 配置。`;
+    }
+  }
+
   async function initializeWorkspace() {
     let serverReady = await hydrateWorkspaceFromServer();
     if (!serverReady) {
@@ -1230,26 +1274,12 @@ function hydrateWorkspace() {
   });
   on("logoutBtn", "click", logoutUser);
   on("saveHarnessConfigBtn", "click", saveHarnessConfig);
-  on("harnessBtn", "click", async () => {
-    const name = getCurrentSurname();
-    const contextItems = retrieveMarkdownContext(name, byId("retrievalQuery").value, getSelectedSourceTypes());
-    byId("harnessResult").textContent = `已召回 ${contextItems.length} 条 Markdown 上下文，正在生成${name}姓初稿。`;
-    byId("aiDraft").textContent = "生成中...";
-    try {
-    const draft = await callAiModel({ surname: name, contextItems });
-    byId("aiDraft").textContent = draft;
-    byId("harnessResult").textContent = `已通过服务端 AI 代理生成${name}姓 AI 初稿，进入待审核队列。`;
-    if (!reviewState.some(item => item.surname === name && item.title.includes("AI Harness"))) {
-      reviewState.unshift(createReviewItem(name, `${name}姓 AI Harness 初稿`, "AI 初稿", "文史编辑"));
-      renderRepositoryStats();
-      renderReviewQueue();
-      persistWorkspace(`${name}姓 AI 初稿已保存到审核队列。`);
-    }
-    } catch (error) {
-    byId("aiDraft").textContent = buildOfflineDraft(name, contextItems);
-    byId("harnessResult").textContent = `AI 接口调用失败，已回退到离线初稿：${error.message}`;
-    }
+  on("switchSurnameBtn", "click", switchAdminSurname);
+  on("activeSurnameInput", "keydown", event => {
+    if (event.key === "Enter") switchAdminSurname();
   });
+  on("harnessBtn", "click", generateHarnessDraft);
+  on("quickHarnessBtn", "click", generateHarnessDraft);
   on("addSourceBtn", "click", addCorpusSource);
   on("batchSurnameBtn", "click", importSurnameBatch);
   on("saveProfileBtn", "click", saveProfileEdits);

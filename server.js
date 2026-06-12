@@ -546,7 +546,7 @@ function normalizeHarnessConfigPayload(payload) {
     ...current,
     endpoint: String(payload.endpoint || current.endpoint || "").trim(),
     model: String(payload.model || current.model || defaultAiModel).trim(),
-    apiKey: payload.apiKey === undefined ? current.apiKey : String(payload.apiKey || "").trim(),
+    apiKey: payload.apiKey === undefined || String(payload.apiKey || "").trim() === "" ? current.apiKey : String(payload.apiKey || "").trim(),
     systemPrompt: String(payload.systemPrompt || current.systemPrompt || "").trim(),
     temperature: Number(payload.temperature ?? current.temperature ?? 0.3),
     retrievalQuery: String(payload.retrievalQuery || current.retrievalQuery || "").trim(),
