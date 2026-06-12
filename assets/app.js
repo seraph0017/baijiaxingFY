@@ -674,6 +674,46 @@ function hydrateWorkspace() {
     return cleaned ? cleaned.slice(0, 260) : fallback;
   }
 
+  function parseAiListSection(text) {
+    return String(text || "")
+      .split(/\n+/)
+      .map(line => line.replace(/^\s*(?:[-*]|\d+[.、)]?)\s*/, "").trim())
+      .filter(Boolean);
+  }
+
+  function parseAiOrigins(text) {
+    return parseAiListSection(text).slice(0, 6).map(line => {
+      const [titlePart, ...rest] = line.split(/[：:]/);
+      const title = titlePart?.trim() || "源流线索";
+      const body = rest.join("：").trim() || line;
+      const level = /正史|典籍|可信|高/.test(line) ? "较高可信" : (/传说|民间|待核|需核/.test(line) ? "待核来源" : "多源并列");
+      return { title, text: body, level };
+    });
+  }
+
+  function parseAiMigrations(text) {
+    const lines = parseAiListSection(text);
+    const fallbackPhases = ["先秦/秦汉", "魏晋南北朝", "唐宋元明清", "近现代"];
+    return (lines.length ? lines : fallbackPhases.map(phase => `${phase}：需继续核验迁徙路线。`))
+      .slice(0, 4)
+      .map((line, index) => {
+        const [phasePart, ...rest] = line.split(/[：:]/);
+        const phase = phasePart?.trim() || fallbackPhases[index] || `阶段 ${index + 1}`;
+        const detail = rest.join("：").trim() || line;
+        return [phase, detail];
+      });
+  }
+
+  function parseAiFigures(text) {
+    return parseAiListSection(text).slice(0, 6).map(line => {
+      const [namePart, ...rest] = line.split(/[：:]/);
+      const name = namePart?.trim() || "人物线索";
+      const desc = rest.join("：").trim() || line;
+      const type = /家风|家训|宗祠|楹联/.test(line) ? "家风家训" : (/典故|故事|传说/.test(line) ? "典故线索" : "待核人物");
+      return { name, desc, type };
+    });
+  }
+
   function applyAiDraftToProfile(surname, draft) {
     const data = surnames[surname] || createPendingSurname(surname, { persist: false });
     const traditional = extractAiProfileField(draft, ["繁体", "繁體"]) || data.traditional || data.char;
@@ -686,6 +726,13 @@ function hydrateWorkspace() {
       extractAiSection(draft, "源流摘要") || extractAiSection(draft, "源流分支"),
       data.summary
     );
+    const parsedOrigins = parseAiOrigins(extractAiSection(draft, "源流分支"));
+    const parsedMigrations = parseAiMigrations(extractAiSection(draft, "迁徙路线"));
+    const parsedBranches = parseAiListSection(extractAiSection(draft, "望族分支")).slice(0, 8);
+    const parsedFigures = [
+      ...parseAiFigures(extractAiSection(draft, "名人典故")),
+      ...parseAiFigures(extractAiSection(draft, "家风家训"))
+    ].slice(0, 8);
     data.traditional = traditional;
     data.pinyin = pinyin;
     data.dynasty = dynasty;
@@ -700,9 +747,14 @@ function hydrateWorkspace() {
       "郡望": junwang,
       "堂号": tanghao
     };
+    if (parsedOrigins.length) data.origins = parsedOrigins;
+    if (parsedMigrations.length) data.migrations = parsedMigrations;
+    if (parsedBranches.length) data.branches = parsedBranches;
+    if (parsedFigures.length) data.figures = parsedFigures;
+    renderSurname(surname);
     syncProfileEditor();
-    persistWorkspace(`${surname}姓 AI 初稿已回填到校订字段。`);
-    if (byId("profileEditStatus")) byId("profileEditStatus").textContent = `${surname}姓 AI 初稿已回填到校订字段，请人工确认后保存并送审。`;
+    persistWorkspace(`${surname}姓 AI 初稿已回填到校订字段，源流分支、迁徙路线等结构化内容已同步。`);
+    if (byId("profileEditStatus")) byId("profileEditStatus").textContent = `${surname}姓 AI 初稿已回填到校订字段，源流分支、迁徙路线等结构化内容已同步，请人工确认后保存并送审。`;
   }
 
   function buildAiDraftPrompt(data, contextItems) {
