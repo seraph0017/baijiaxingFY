@@ -352,14 +352,18 @@ h1 {
 }
 
 .hot-list {
-  display: grid;
-  grid-template-columns: repeat(10, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: stretch;
   gap: 10px;
   max-width: 980px;
   margin: 0 auto;
 }
 
 .chip {
+  flex: 0 0 64px;
+  min-width: 64px;
   min-height: 72px;
   display: grid;
   place-items: center;
@@ -377,9 +381,18 @@ h1 {
   cursor: pointer;
 }
 
-.chip[data-surname-length="2"] { font-size: 24px; }
+.chip[data-surname-length="2"] {
+  flex-basis: 96px;
+  min-width: 96px;
+  font-size: 24px;
+}
+
 .chip[data-surname-length="3"],
-.chip[data-surname-length="4"] { font-size: 20px; }
+.chip[data-surname-length="4"] {
+  flex-basis: 112px;
+  min-width: 112px;
+  font-size: 20px;
+}
 
 .chip:hover {
   color: var(--gold-soft);
@@ -1216,9 +1229,6 @@ textarea {
   .quick-surname-row,
   .login-panel {
     grid-template-columns: 1fr;
-  }
-  .hot-list {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
   .chip { min-height: 68px; }
   section {
