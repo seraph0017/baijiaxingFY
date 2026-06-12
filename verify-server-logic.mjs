@@ -1,4 +1,4 @@
-import { appendFileSync, chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { Readable, Writable } from "node:stream";
@@ -570,8 +570,12 @@ await expectOk("反馈状态写回失败时返回脱敏错误", feedbackStatusUn
 rmSync(feedbackPath, { recursive: true, force: true });
 writeFileSync(feedbackPath, `${JSON.stringify({ id: feedback.json.feedback.id, surname: "陈", content: "迁徙节点来源建议补充地方志出处。", contact: "13800000000", status: "已处理", createdAt: "2025-01-03T00:00:00.000Z" })}\n`);
 
+const originalMathRandomForFeedback = Math.random;
+Math.random = () => 0.123456789;
+const blockedFeedbackTempPath = join(runtimeDir, `.tmp-${Date.now()}-${Math.random().toString(16).slice(2)}.txt`);
+mkdirSync(blockedFeedbackTempPath, { recursive: true });
+Math.random = () => 0.123456789;
 let feedbackStatusWriteFailed;
-chmodSync(runtimeDir, 0o500);
 try {
   feedbackStatusWriteFailed = await callRoute({
     method: "PATCH",
@@ -580,7 +584,8 @@ try {
     body: JSON.stringify({ id: feedback.json.feedback.id, status: "已关闭" })
   });
 } finally {
-  chmodSync(runtimeDir, 0o700);
+  Math.random = originalMathRandomForFeedback;
+  rmSync(blockedFeedbackTempPath, { recursive: true, force: true });
 }
 await expectOk("反馈状态写回不可写时返回脱敏错误", feedbackStatusWriteFailed.status === 503
   && /反馈文件不可写/.test(feedbackStatusWriteFailed.json?.error || "")
