@@ -58,6 +58,7 @@
             <button id="searchBtn">查档案</button>
           </div>
           <p class="muted">支持姓氏或拼音查询。未知姓氏会生成 AI 临时初稿，管理员审核后才会进入正式资料库。</p>
+          <div class="search-progress hidden" id="searchProgress" aria-live="polite"></div>
           <div class="hot-list" id="hotList"></div>
         </aside>
       </div>
@@ -88,6 +89,7 @@
           </div>
           <p id="profileSummary">陈姓常见源流之一与妫姓、陈国相关，始祖线索多指向陈胡公。陈国故地常与今河南淮阳一带关联，颍川、汝南等地也是重要地域节点。</p>
           <div class="tags" id="profileTags"></div>
+          <div class="ai-progress-panel hidden" id="aiProgressPanel" aria-live="polite"></div>
           <div class="info-grid" id="infoGrid"></div>
         </div>
       </div>

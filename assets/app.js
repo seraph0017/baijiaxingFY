@@ -6,6 +6,7 @@ let auditState = [];
 let workspaceSaveChain = Promise.resolve();
 let workspaceSaveVersion = 0;
 let currentSurname = "陈";
+let publicAiProgressTimer = null;
 
   const STORAGE_KEY = "baijiaxing-suyuanlu-workspace-v1";
 
@@ -1354,6 +1355,7 @@ function hydrateWorkspace() {
     ].map(([label, value, className]) => `<span class="meta-pill ${className}"><small>${escapeHtml(label)}</small>${escapeHtml(value)}</span>`).join("");
     byId("profileSummary").textContent = data.summary;
     byId("profileTags").innerHTML = data.tags.map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join("");
+    hidePublicAiProgress({ keepSearchMessage: true });
     byId("infoGrid").innerHTML = Object.entries(data.info).map(([key, value]) => (
     `<div class="info"><small>${escapeHtml(key)}</small><strong>${escapeHtml(value)}</strong></div>`
     )).join("");
@@ -1398,6 +1400,93 @@ function hydrateWorkspace() {
     if (byId("harnessResult")) byId("harnessResult").textContent = "";
     if (byId("aiDraft")) byId("aiDraft").textContent = "等待生成。默认先从本页资料库召回上下文。";
     syncProfileEditor();
+  }
+
+  function setSearchBusy(isBusy, label = "查档案") {
+    const button = byId("searchBtn");
+    if (!button) return;
+    button.disabled = isBusy;
+    button.classList.toggle("is-loading", isBusy);
+    button.textContent = isBusy ? "生成中" : label;
+  }
+
+  function hidePublicAiProgress(options = {}) {
+    const { keepSearchMessage = false } = options;
+    if (publicAiProgressTimer) {
+      clearInterval(publicAiProgressTimer);
+      publicAiProgressTimer = null;
+    }
+    const panel = byId("aiProgressPanel");
+    if (panel) {
+      panel.classList.add("hidden");
+      panel.innerHTML = "";
+    }
+    document.querySelector(".profile-head")?.classList.remove("generating");
+    if (!keepSearchMessage && byId("searchProgress")) {
+      byId("searchProgress").classList.add("hidden");
+      byId("searchProgress").innerHTML = "";
+    }
+  }
+
+  function renderPublicAiProgressStep(activeIndex) {
+    const steps = ["检索资料线索", "整理源流结构", "生成待审核初稿"];
+    const panel = byId("aiProgressPanel");
+    if (!panel) return;
+    panel.querySelectorAll(".ai-progress-step").forEach((item, index) => {
+      item.classList.toggle("active", index === activeIndex);
+      item.classList.toggle("complete", index < activeIndex);
+    });
+  }
+
+  function showPublicAiProgress(name) {
+    hidePublicAiProgress();
+    setSearchBusy(true);
+    if (byId("searchProgress")) {
+      byId("searchProgress").classList.remove("hidden");
+      byId("searchProgress").innerHTML = `
+      <strong>正在整理${escapeHtml(name)}姓 AI 临时初稿...</strong>
+      <span>将生成前台临时预览，管理员审核前不会写入正式资料库。</span>`;
+    }
+    document.querySelector(".profile-head").dataset.surname = name;
+    document.querySelector(".profile-head").classList.add("generating");
+    setSurnameLengthClass(document.querySelector(".profile-head"), name);
+    setSurnameLengthClass(byId("surnameMark"), name);
+    byId("surnameMark").textContent = name;
+    byId("profileTitle").textContent = `${name}姓`;
+    byId("profileMeta").innerHTML = [
+      ["状态", "AI 生成中", "profile-review-status"],
+      ["类型", "临时预览", "profile-source-count"],
+      ["保存", "未持久化", ""]
+    ].map(([label, value, className]) => `<span class="meta-pill ${className}"><small>${escapeHtml(label)}</small>${escapeHtml(value)}</span>`).join("");
+    byId("profileSummary").textContent = "正在召回可用资料，整理源流、迁徙、望族、人物与审核线索。";
+    byId("profileTags").innerHTML = ["AI 生成中", "待人工审核", "未持久化"].map(tag => `<span class="tag">${tag}</span>`).join("");
+    byId("infoGrid").innerHTML = Array.from({ length: 6 }, (_, index) => `
+    <div class="info skeleton-info"><small>${["繁体", "拼音", "起源朝代", "得姓始祖", "郡望", "堂号"][index]}</small><strong></strong></div>`).join("");
+    byId("tab-origin").innerHTML = `<div class="grid-2">${[0, 1].map(() => `<article class="card skeleton-card"><h3></h3><p></p><span></span></article>`).join("")}</div>`;
+    byId("tab-migration").innerHTML = `<div class="timeline">${[0, 1, 2, 3].map(() => `<div class="phase skeleton-phase"><strong></strong><span></span></div>`).join("")}</div>`;
+    byId("tab-branches").innerHTML = `<div class="grid-3">${[0, 1, 2].map(() => `<article class="card skeleton-card"><p></p></article>`).join("")}</div>`;
+    byId("tab-sources").innerHTML = `<div class="source-list">${[0, 1].map(() => `<div class="source skeleton-source"><strong></strong><p></p></div>`).join("")}</div>`;
+    byId("tab-visuals").innerHTML = `<div class="visual-grid"><div class="totem-box">${escapeHtml(name)}</div><article class="card skeleton-card"><h3></h3><p></p><p></p></article></div>`;
+    byId("cultureGrid").innerHTML = `<article class="card skeleton-card"><h3></h3><p></p><span></span></article><article class="card skeleton-card"><h3></h3><p></p><span></span></article><article class="card skeleton-card"><h3></h3><p></p><span></span></article>`;
+    const panel = byId("aiProgressPanel");
+    if (panel) {
+      panel.classList.remove("hidden");
+      panel.innerHTML = `
+      <div class="ai-progress-head">
+        <strong>${escapeHtml(name)}姓 AI 初稿生成中</strong>
+        <span>不会自动入库，审核后才会成为正式档案</span>
+      </div>
+      <div class="ai-progress-steps">
+        <span class="ai-progress-step active">检索资料线索</span>
+        <span class="ai-progress-step">整理源流结构</span>
+        <span class="ai-progress-step">生成待审核初稿</span>
+      </div>`;
+    }
+    let activeIndex = 0;
+    publicAiProgressTimer = setInterval(() => {
+      activeIndex = (activeIndex + 1) % 3;
+      renderPublicAiProgressStep(activeIndex);
+    }, 1800);
   }
 
   function generateOfflineHarnessDraft(name) {
@@ -1537,14 +1626,27 @@ function hydrateWorkspace() {
       document.querySelector("#profile").scrollIntoView({ behavior: "smooth" });
       return;
     }
+    showPublicAiProgress(normalized);
     byId("actionStatus").textContent = `正在生成${normalized}姓 AI 临时初稿，不会写入正式资料库。`;
+    document.querySelector("#profile").scrollIntoView({ behavior: "smooth" });
     try {
       const transientProfile = await generatePublicAiPreview(normalized);
       renderSurname(transientProfile.char, { transientData: transientProfile, allowCreate: false });
       byId("actionStatus").textContent = `${transientProfile.char}姓 AI 临时初稿已生成，待管理员审核后才会持久化。`;
+      if (byId("searchProgress")) {
+        byId("searchProgress").classList.remove("hidden");
+        byId("searchProgress").innerHTML = `<strong>${escapeHtml(transientProfile.char)}姓 AI 临时初稿已生成</strong><span>当前为临时预览，管理员审核后才会持久化。</span>`;
+      }
     } catch (error) {
       renderSurname(normalized, { transientData: createTransientPendingSurname(normalized), allowCreate: false });
       byId("actionStatus").textContent = `AI 临时初稿生成失败：${error.message}`;
+      if (byId("searchProgress")) {
+        byId("searchProgress").classList.remove("hidden");
+        byId("searchProgress").innerHTML = `<strong>${escapeHtml(normalized)}姓生成失败</strong><span>${escapeHtml(error.message)}</span>`;
+      }
+    } finally {
+      hidePublicAiProgress({ keepSearchMessage: true });
+      setSearchBusy(false);
     }
     document.querySelector("#profile").scrollIntoView({ behavior: "smooth" });
   }
