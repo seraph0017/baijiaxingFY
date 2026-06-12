@@ -30,12 +30,13 @@ expectOk("首页可信证据可见", html.includes("多源并列") && html.inclu
 expectOk("首页查询使用档案语言", html.includes('id="searchBtn">查档案</button>') && html.includes("姓氏 / 拼音"));
 expectOk("页面标题样式隔离", !/(^|\n)h1:after\s*\{/.test(styles) && /\.hero-copy h1:after/.test(styles) && !loginHtml.includes("AI 可信资料网络") && !adminHtml.includes("AI 可信资料网络"));
 expectOk("登录页独立后台入口", loginHtml.includes('class="login-card"') && loginHtml.includes('class="login-context"') && loginHtml.includes("文史编辑工作台"));
-expectOk("后台工作台指标区", adminHtml.includes('class="admin-overview"') && adminHtml.includes("待审核") && adminHtml.includes("待补来源") && adminHtml.includes("反馈工单") && adminHtml.includes("最近发布"));
-expectOk("后台姓氏一键操作", ["activeSurnameInput", "switchSurnameBtn", "quickHarnessBtn", "activeSurnameStatus"].every(id => adminIds.includes(id)) && app.includes("function switchAdminSurname") && app.includes("function generateHarnessDraft") && app.includes("quickHarnessBtn") && app.includes("请先输入汉字姓氏，例如：徐。"));
-expectOk("核心模块完整", ["profile", "culture", "sources", "feedback"].every(id => html.includes(`id="${id}"`)) && adminHtml.includes('id="harness"'));
+expectOk("后台工作台指标区", adminHtml.includes('class="admin-overview"') && adminHtml.includes("待审核") && adminHtml.includes("待补资料") && adminHtml.includes("反馈工单") && adminHtml.includes("已发布"));
+expectOk("后台主线简化", ["surnameTask", "activeSurnameInput", "quickHarnessBtn", "aiDraft", "profileEditor", "reviewQueue", "advancedOps"].every(id => adminIds.includes(id)) && adminHtml.includes("输入姓氏，生成初稿，校订后发布") && adminHtml.includes("补充来源材料") && adminHtml.includes("<summary>系统设置") && adminHtml.includes("<summary>高级工具") && adminHtml.indexOf('id="surnameTask"') < adminHtml.indexOf('id="profileEditor"') && adminHtml.indexOf('id="profileEditor"') < adminHtml.indexOf('id="reviewQueue"'));
+expectOk("后台姓氏一键操作", ["activeSurnameInput", "quickHarnessBtn", "activeSurnameStatus"].every(id => adminIds.includes(id)) && !adminIds.includes("switchSurnameBtn") && app.includes("function switchAdminSurname") && app.includes("function generateHarnessDraft") && app.includes("quickHarnessBtn") && app.includes("请先输入汉字姓氏，例如：徐。"));
+expectOk("核心模块完整", ["profile", "culture", "sources", "feedback"].every(id => html.includes(`id="${id}"`)) && ["surnameTask", "profileEditor", "reviewDesk", "advancedOps"].every(id => adminIds.includes(id)));
 expectOk("前台后台页面分区", ids.includes("publicView") && adminIds.includes("adminApp") && html.includes('href="/admin"') && adminHtml.includes('href="/"'));
 expectOk("查询控件完整", ["surnameInput", "searchBtn", "hotList", "dataReady"].every(id => ids.includes(id)));
-expectOk("AI Harness 控件完整", ["retrievalQuery", "harnessBtn", "aiDraft"].every(id => adminIds.includes(id)) && adminHtml.indexOf('id="adminApp"') < adminHtml.indexOf('id="harness"'));
+expectOk("AI Harness 控件完整", ["retrievalQuery", "quickHarnessBtn", "aiDraft"].every(id => adminIds.includes(id)) && !adminIds.includes("harnessBtn") && adminHtml.indexOf('id="adminApp"') < adminHtml.indexOf('id="surnameTask"'));
 expectOk("运营令牌验证", ["adminToken", "verifyAdminBtn", "clearAdminBtn", "adminStatus"].every(id => adminIds.includes(id)) && app.includes("function verifyAdminAccess") && app.includes("function clearAdminAccess") && app.includes("sessionStorage.removeItem(\"baijiaxing-admin-token\")") && app.includes("loadFeedbackQueue()") && app.includes("loadAuditTrail()"));
 expectOk("资料沉淀控件完整", ["sourceTitle", "sourceType", "sourceContent", "addSourceBtn", "repositoryStats", "reviewQueue"].every(id => adminIds.includes(id)));
 expectOk("批量待收录姓氏", ["batchSurnameInput", "batchSurnameBtn", "batchSurnameStatus"].every(id => adminIds.includes(id)) && app.includes("function importSurnameBatch") && app.includes("createPendingSurname(name, { persist: false })"));
@@ -64,7 +65,7 @@ expectOk("反馈闭环完整", ["feedbackText", "feedbackContact", "feedbackBtn"
 expectOk("运营反馈工单台", ["feedbackQueue", "refreshFeedbackBtn"].every(id => adminIds.includes(id)) && app.includes("renderFeedbackQueue") && app.includes("updateFeedbackStatus") && app.includes("联系方式") && app.includes("item.contact"));
 expectOk("运营审计事件台", ["auditTrail", "refreshAuditBtn"].every(id => adminIds.includes(id)) && app.includes("renderAuditTrail") && app.includes("loadAuditTrail"));
 expectOk("审计请求 ID 可见", app.includes("audit-request-id") && app.includes("请求 ID") && app.includes("item.requestId") && /\.audit-request-id/.test(styles) && /word-break:\s*break-all/.test(styles));
-expectOk("审核队列稳定 ID", app.includes("function stableReviewId") && app.includes("function normalizeReviewItem") && app.includes("function createReviewItem") && app.includes("data-review-id") && app.includes("updateReviewStatus(actionTarget.dataset.reviewId") && app.includes("entry.id === id") && !app.includes("data-title="));
+expectOk("审核队列稳定 ID", app.includes("function stableReviewId") && app.includes("function normalizeReviewItem") && app.includes("function createReviewItem") && app.includes("data-review-id") && app.includes("updateReviewStatus(actionTarget.dataset.reviewId") && app.includes("entry.id === id") && app.includes("发布到前台") && app.includes("退回补资料") && app.includes("待补资料") && !app.includes("data-title="));
 expectOk("AI Harness 服务端代理优先", app.includes("const draft = await callAiModel") && app.includes("服务端 AI 代理") && !app.includes("apiKey\n      ? await callAiModel"));
 expectOk("AI Harness 页面文案同步", adminHtml.includes("优先调用服务端 AI 代理") && !adminHtml.includes("未填写 Key 时走离线样例"));
 expectOk("移动端布局", /@media \(max-width: 900px\)/.test(styles) && /\.hero-panel/.test(styles));
@@ -82,4 +83,4 @@ expectOk("未命中拼音不污染姓氏库", app.includes("function isLatinLike
 expectOk("复姓输入支持", app.includes("function normalizeSurnameInput") && app.includes("replace(/(姓氏|姓|氏)$/, \"\")") && app.includes("slice(0, 4)") && !app.includes(".value.trim().slice(0, 1)") && !app.includes("String(name || \"\").trim().slice(0, 1)"));
 expectOk("姓氏双字后缀归一化", app.includes("replace(/(姓氏|姓|氏)$/, \"\")"));
 
-console.log("UI 结构检查通过：63/63");
+console.log("UI 结构检查通过：64/64");

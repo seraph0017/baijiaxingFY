@@ -44,10 +44,17 @@ let currentSurname = "陈";
     id: normalizeClientText(source.id, stableReviewId(source, index)),
     surname: normalizeSurnameInput(source.surname, "未"),
     title: normalizeClientText(source.title, "未命名审核项"),
-    status: normalizeClientText(source.status, "待补来源"),
+    status: normalizeReviewStatus(source.status),
     owner: normalizeClientText(source.owner, "文史编辑"),
     createdAt: normalizeClientText(source.createdAt, new Date().toISOString())
     };
+  }
+
+  function normalizeReviewStatus(status) {
+    const value = normalizeClientText(status, "待审核");
+    if (["AI 初稿", "待补来源", "待收录"].includes(value)) return "待审核";
+    if (value === "已驳回") return "待补资料";
+    return value;
   }
 
   function createReviewItem(surname, title, status, owner) {
@@ -526,7 +533,7 @@ function hydrateWorkspace() {
     sources: ["待新增 Markdown 资料", "待文史编辑补充来源"]
     };
     surnames[char] = pending;
-    reviewState.unshift(createReviewItem(char, `${char}姓待收录档案`, "待收录", "运营整理"));
+    reviewState.unshift(createReviewItem(char, `${char}姓待收录档案`, "待审核", "运营整理"));
     if (persist) {
     renderHotList();
     renderRepositoryStats();
@@ -641,8 +648,8 @@ function hydrateWorkspace() {
     title,
     content
     });
-    reviewState.unshift(createReviewItem(surname, `${surname}姓新增资料：${title}`, "待补来源", "文史编辑"));
-    byId("sourceStatus").textContent = `已加入${surname}姓 Markdown 资料库，可参与下一次 AI 检索。`;
+    reviewState.unshift(createReviewItem(surname, `${surname}姓新增资料：${title}`, "待审核", "文史编辑"));
+    byId("sourceStatus").textContent = `已保存${surname}姓来源材料，可参与下一次 AI 初稿生成。`;
     byId("sourceTitle").value = "";
     byId("sourceContent").value = "";
     renderRepositoryStats();
@@ -790,8 +797,10 @@ function hydrateWorkspace() {
       <div><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.surname)}姓 · ${escapeHtml(item.owner)}</small></div>
       <div class="review-actions">
       <button class="secondary" data-review="${escapeHtml(item.surname)}" type="button">查看</button>
-      <button data-action="approve" data-review-id="${escapeHtml(item.id)}" type="button">批准</button>
-      <button class="secondary" data-action="reject" data-review-id="${escapeHtml(item.id)}" type="button">驳回</button>
+      ${item.status === "已发布"
+        ? `<button class="secondary" data-action="reject" data-review-id="${escapeHtml(item.id)}" type="button">退回补资料</button>`
+        : `<button data-action="approve" data-review-id="${escapeHtml(item.id)}" type="button">发布到前台</button>
+      <button class="secondary" data-action="reject" data-review-id="${escapeHtml(item.id)}" type="button">退回补资料</button>`}
       </div>
     </div>
     `).join("");
@@ -957,23 +966,23 @@ function hydrateWorkspace() {
     "郡望": junwang,
     "堂号": tanghao
     };
-    reviewState.unshift(createReviewItem(name, `${name}姓档案人工校订`, "待补来源", "文史编辑"));
+    reviewState.unshift(createReviewItem(name, `${name}姓档案人工校订`, "待审核", "文史编辑"));
     renderSurname(name);
     renderRepositoryStats();
     renderReviewQueue();
     syncProfileEditor();
     persistWorkspace(`${name}姓档案校订已保存。`);
-    byId("profileEditStatus").textContent = `${name}姓档案已保存，并进入审核队列。`;
+    byId("profileEditStatus").textContent = `${name}姓档案已保存，已送入审核发布队列。`;
   }
 
   function updateReviewStatus(id, status) {
     const item = reviewState.find(entry => entry.id === id);
     if (!item) return;
-    item.status = status;
-    item.owner = status === "已发布" ? "已发布" : "待补充";
+    item.status = normalizeReviewStatus(status);
+    item.owner = item.status === "已发布" ? "已发布" : "待补充";
     renderRepositoryStats();
     renderReviewQueue();
-    persistWorkspace(`审核状态已更新为${status}。`);
+    persistWorkspace(`审核状态已更新为${item.status}。`);
   }
 
   function renderMigrationMap(routeItems) {
@@ -1080,7 +1089,7 @@ function hydrateWorkspace() {
     </article>`).join("");
     byId("actionStatus").textContent = "";
     if (byId("harnessResult")) byId("harnessResult").textContent = "";
-    if (byId("aiDraft")) byId("aiDraft").textContent = "等待生成。默认先从本页 Markdown 资料库召回上下文。";
+    if (byId("aiDraft")) byId("aiDraft").textContent = "等待生成。默认先从本页资料库召回上下文。";
     syncProfileEditor();
   }
 
@@ -1089,7 +1098,7 @@ function hydrateWorkspace() {
     byId("aiDraft").textContent = buildOfflineDraft(name, contextItems);
     byId("harnessResult").textContent = `演示模式已召回 ${contextItems.length} 条 Markdown 上下文，生成${name}姓离线 AI 初稿。`;
     if (!reviewState.some(item => item.surname === name && item.title.includes("AI Harness"))) {
-    reviewState.unshift(createReviewItem(name, `${name}姓 AI Harness 初稿`, "AI 初稿", "文史编辑"));
+    reviewState.unshift(createReviewItem(name, `${name}姓 AI Harness 初稿`, "待审核", "文史编辑"));
     renderRepositoryStats();
     renderReviewQueue();
     persistWorkspace(`${name}姓 AI 初稿已保存到审核队列。`);
@@ -1177,7 +1186,7 @@ function hydrateWorkspace() {
     byId("harnessResult").textContent = `已通过服务端 AI 代理生成${name}姓 AI 初稿，进入待审核队列。`;
     if (byId("activeSurnameStatus")) byId("activeSurnameStatus").textContent = `${name}姓 AI 初稿已生成。`;
     if (!reviewState.some(item => item.surname === name && item.title.includes("AI Harness"))) {
-      reviewState.unshift(createReviewItem(name, `${name}姓 AI Harness 初稿`, "AI 初稿", "文史编辑"));
+      reviewState.unshift(createReviewItem(name, `${name}姓 AI Harness 初稿`, "待审核", "文史编辑"));
       renderRepositoryStats();
       renderReviewQueue();
       persistWorkspace(`${name}姓 AI 初稿已保存到审核队列。`);
@@ -1278,7 +1287,6 @@ function hydrateWorkspace() {
   on("activeSurnameInput", "keydown", event => {
     if (event.key === "Enter") switchAdminSurname();
   });
-  on("harnessBtn", "click", generateHarnessDraft);
   on("quickHarnessBtn", "click", generateHarnessDraft);
   on("addSourceBtn", "click", addCorpusSource);
   on("batchSurnameBtn", "click", importSurnameBatch);
@@ -1294,7 +1302,7 @@ function hydrateWorkspace() {
   on("reviewQueue", "click", event => {
     const actionTarget = event.target.closest("[data-action]");
     if (actionTarget) {
-    const nextStatus = actionTarget.dataset.action === "approve" ? "已发布" : "已驳回";
+    const nextStatus = actionTarget.dataset.action === "approve" ? "已发布" : "待补资料";
     updateReviewStatus(actionTarget.dataset.reviewId, nextStatus);
     return;
     }
