@@ -363,7 +363,7 @@ h1 {
   min-height: 72px;
   display: grid;
   place-items: center;
-  padding: 0;
+  padding: 0 8px;
   color: var(--paper);
   background: rgba(16, 26, 38, 0.9);
   border: 1px solid rgba(65, 83, 107, 0.86);
@@ -371,16 +371,21 @@ h1 {
   font-family: "Songti SC", "STSong", "Noto Serif CJK SC", serif;
   font-size: 28px;
   font-weight: 900;
+  line-height: 1.05;
+  text-align: center;
+  white-space: nowrap;
   cursor: pointer;
 }
+
+.chip[data-surname-length="2"] { font-size: 24px; }
+.chip[data-surname-length="3"],
+.chip[data-surname-length="4"] { font-size: 20px; }
 
 .chip:hover {
   color: var(--gold-soft);
   border-color: rgba(212, 175, 55, 0.62);
   background: rgba(125, 15, 24, 0.28);
 }
-
-.chip::first-letter { font-size: 32px; }
 
 .tag {
   display: inline-flex;
@@ -489,7 +494,14 @@ h3 {
   font-family: "Songti SC", "STSong", "Noto Serif CJK SC", serif;
   font-size: 260px;
   line-height: 1;
+  white-space: nowrap;
   pointer-events: none;
+}
+
+.profile-head.surname-long:after {
+  right: 20px;
+  top: -18px;
+  font-size: 160px;
 }
 
 .surname-mark {
@@ -504,6 +516,13 @@ h3 {
   font-family: "Songti SC", "STSong", "Noto Serif CJK SC", serif;
   font-size: 72px;
   font-weight: 900;
+  line-height: 1.05;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.surname-mark.surname-long {
+  font-size: 52px;
 }
 
 .profile-title-row {
@@ -795,6 +814,13 @@ li { margin: 5px 0; }
   font-family: "Songti SC", "STSong", "Noto Serif CJK SC", serif;
   font-size: 92px;
   font-weight: 920;
+  line-height: 1.05;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.totem-box.surname-long {
+  font-size: 58px;
 }
 
 .glyph {

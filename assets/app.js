@@ -437,8 +437,15 @@ function hydrateWorkspace() {
     const hotList = byId("hotList");
     if (!hotList) return;
     hotList.innerHTML = Object.keys(surnames).map(name => (
-    `<button class="chip" data-surname="${escapeHtml(name)}">${escapeHtml(name)}</button>`
+    `<button class="chip" data-surname="${escapeHtml(name)}" data-surname-length="${name.length}">${escapeHtml(name)}</button>`
     )).join("");
+  }
+
+  function setSurnameLengthClass(element, name) {
+    if (!element) return;
+    const long = String(name || "").length > 1;
+    element.classList.toggle("surname-long", long);
+    element.classList.toggle("surname-single", !long);
   }
 
   function normalizeSurnameInput(value, fallback = "陈") {
@@ -1212,6 +1219,8 @@ function hydrateWorkspace() {
     }
     byId("surnameInput").value = data.char;
     document.querySelector(".profile-head").dataset.surname = data.char;
+    setSurnameLengthClass(document.querySelector(".profile-head"), data.char);
+    setSurnameLengthClass(byId("surnameMark"), data.char);
     byId("surnameMark").textContent = data.char;
     byId("profileTitle").textContent = `${data.char}姓`;
     byId("profileMeta").innerHTML = [
@@ -1238,7 +1247,7 @@ function hydrateWorkspace() {
     <article class="card"><p>${escapeHtml(item)}</p></article>`).join("")}</div>`;
     byId("tab-visuals").innerHTML = `
     <div class="visual-grid">
-      <div class="totem-box" aria-label="${escapeHtml(data.char)}姓图腾占位">${escapeHtml(data.char)}</div>
+      <div class="totem-box ${data.char.length > 1 ? "surname-long" : "surname-single"}" aria-label="${escapeHtml(data.char)}姓图腾占位">${escapeHtml(data.char)}</div>
       <article class="card">
       <h3>专属图腾与字形演变</h3>
       <p>${escapeHtml(data.visuals.totem)}</p>
