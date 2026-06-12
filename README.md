@@ -44,6 +44,8 @@
 
 ## 运行方式
 
+新增姓氏、以“徐”姓为例沉淀资料、以及 ccswitch / OpenAI-compatible Harness 配置，可看：[运营帮助-新增姓氏与Harness配置.md](docs/运营帮助-新增姓氏与Harness配置.md)。
+
 ### 本机快速启动
 
 本项目正式持久化使用 MySQL。先准备本地库和账号：
