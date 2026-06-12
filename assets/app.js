@@ -653,6 +653,58 @@ function hydrateWorkspace() {
     ].join("\n\n");
   }
 
+  function extractAiProfileField(draft, labels) {
+    const escaped = labels.map(label => label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+    const pattern = new RegExp(`(?:${escaped})\\s*[=：:]\\s*([^；;，,\\n]+)`);
+    const match = String(draft || "").match(pattern);
+    return match ? match[1].trim().replace(/[。.]$/, "") : "";
+  }
+
+  function extractAiSection(draft, title) {
+    const pattern = new RegExp(`${title}[：:]\\s*([\\s\\S]*?)(?=\\n\\s*(?:源流分支|迁徙路线|望族分支|名人典故|家风家训|参考来源|审核风险)[：:]|$)`);
+    const match = String(draft || "").match(pattern);
+    return match ? match[1].trim() : "";
+  }
+
+  function summarizeAiSection(text, fallback) {
+    const cleaned = String(text || "")
+      .replace(/^\s*[-\d.、]+\s*/gm, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    return cleaned ? cleaned.slice(0, 260) : fallback;
+  }
+
+  function applyAiDraftToProfile(surname, draft) {
+    const data = surnames[surname] || createPendingSurname(surname, { persist: false });
+    const traditional = extractAiProfileField(draft, ["繁体", "繁體"]) || data.traditional || data.char;
+    const pinyin = extractAiProfileField(draft, ["拼音", "读音", "讀音"]) || data.pinyin || data.info?.["拼音"];
+    const dynasty = extractAiProfileField(draft, ["起源朝代", "朝代线索", "起源时期"]) || data.dynasty || data.info?.["起源朝代"];
+    const ancestor = extractAiProfileField(draft, ["得姓始祖", "始祖线索", "始祖"]) || data.ancestor || data.info?.["得姓始祖"];
+    const junwang = extractAiProfileField(draft, ["郡望"]) || data.info?.["郡望"];
+    const tanghao = extractAiProfileField(draft, ["堂号", "堂號"]) || data.info?.["堂号"];
+    const summary = summarizeAiSection(
+      extractAiSection(draft, "源流摘要") || extractAiSection(draft, "源流分支"),
+      data.summary
+    );
+    data.traditional = traditional;
+    data.pinyin = pinyin;
+    data.dynasty = dynasty;
+    data.ancestor = ancestor;
+    data.summary = summary;
+    data.info = {
+      ...data.info,
+      "繁体": traditional,
+      "拼音": pinyin,
+      "起源朝代": dynasty,
+      "得姓始祖": ancestor,
+      "郡望": junwang,
+      "堂号": tanghao
+    };
+    syncProfileEditor();
+    persistWorkspace(`${surname}姓 AI 初稿已回填到校订字段。`);
+    if (byId("profileEditStatus")) byId("profileEditStatus").textContent = `${surname}姓 AI 初稿已回填到校订字段，请人工确认后保存并送审。`;
+  }
+
   function buildAiDraftPrompt(data, contextItems) {
     const contextText = contextItems.length
       ? contextItems.map((item, index) => `## 资料 ${index + 1}：${item.title}\n类型：${item.type || "local"}\n${item.content}`).join("\n\n")
@@ -1220,6 +1272,7 @@ function hydrateWorkspace() {
     try {
     const draft = await callAiModel({ surname: name, contextItems });
     byId("aiDraft").textContent = draft;
+    applyAiDraftToProfile(name, draft);
     byId("harnessResult").textContent = `已通过服务端 AI 代理生成${name}姓 AI 初稿，进入待审核队列。`;
     if (byId("activeSurnameStatus")) byId("activeSurnameStatus").textContent = `${name}姓 AI 初稿已生成。`;
     if (!reviewState.some(item => item.surname === name && item.title.includes("AI Harness"))) {
@@ -1229,7 +1282,9 @@ function hydrateWorkspace() {
       persistWorkspace(`${name}姓 AI 初稿已保存到审核队列。`);
     }
     } catch (error) {
-    byId("aiDraft").textContent = buildOfflineDraft(name, contextItems);
+    const offlineDraft = buildOfflineDraft(name, contextItems);
+    byId("aiDraft").textContent = offlineDraft;
+    applyAiDraftToProfile(name, offlineDraft);
     byId("harnessResult").textContent = `AI 接口调用失败，已回退到离线初稿：${error.message}`;
     if (byId("activeSurnameStatus")) byId("activeSurnameStatus").textContent = `${name}姓已生成离线初稿，请检查 Harness 配置。`;
     }
