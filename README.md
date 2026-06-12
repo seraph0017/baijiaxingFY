@@ -44,6 +44,31 @@
 
 ## 运行方式
 
+### 本机快速启动
+
+本项目当前是零外部依赖的 Node.js MVP，不需要先安装 MySQL、PostgreSQL、Redis 或 MongoDB，也没有 `npm install` 步骤。只要本机有 Node.js 18+，即可直接启动：
+
+```bash
+cd /Users/nathan/Projects/apiGateway/baijiaxingFY
+HOST=127.0.0.1 PORT=8765 DATA_DIR=./data npm start
+```
+
+访问地址：
+
+```text
+http://127.0.0.1:8765/index.html
+http://127.0.0.1:8765/index.html?demo=pending
+http://127.0.0.1:8765/api/health
+```
+
+本地默认不设置 `ADMIN_TOKEN` 时，运营台写接口保持开放，便于演示和录入资料。若要模拟生产鉴权，可用：
+
+```bash
+ADMIN_TOKEN=local-admin-token HOST=127.0.0.1 PORT=8765 DATA_DIR=./data npm start
+```
+
+浏览器进入运营台后，在“管理令牌”输入框填入同一个 `ADMIN_TOKEN`。
+
 推荐以 Node.js 项目方式运行：
 
 ```bash
@@ -83,6 +108,20 @@ REQUEST_TIMEOUT_MS=30000
 ```
 
 不建议直接打开 `index.html` 作为交付预览；当前版本按 Node 项目组织，初始资料库、JSON 持久化和 AI 代理都通过本地服务提供。
+
+## 数据库与本地存储
+
+当前版本不依赖传统数据库。服务端使用 `DATA_DIR` 指向的本地目录做文件持久化：
+
+- `data/seed-workspace.json`：随代码提交的初始姓氏资料库，只作为种子数据。
+- `data/workspace.json`：运行后生成的运营工作区，保存新增姓氏、Markdown 资料和审核队列。
+- `data/feedback.jsonl`：运行后生成的纠错反馈队列。
+- `data/audit.log`：运行后生成的运营审计日志。
+- `data/backups/`：保存或清空工作区前自动生成的备份。
+
+因此本机启动只需要一个可写目录，默认就是项目内 `./data`。生产部署时建议把 `DATA_DIR` 挂载到持久卷，例如 Docker 的 `-v baijiaxing-data:/app/runtime`，避免容器重建后丢失运营数据。
+
+后续如果要多人协作录入、权限拆分、全文检索或小程序高并发访问，再考虑把 `workspace.json` / `feedback.jsonl` 迁移到 MySQL、PostgreSQL、SQLite 或对象存储；当前 MVP 先保持文件存储，便于本机演示和快速上线。
 
 ## 生产部署
 
